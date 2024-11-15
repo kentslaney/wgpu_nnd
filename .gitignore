@@ -1,2 +1,3 @@
+*.vim
 *.npy
 /target
