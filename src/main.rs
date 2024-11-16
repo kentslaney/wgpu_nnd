@@ -125,7 +125,12 @@ async fn run() {
             layout: Some(&pipeline_layout),
             module: &shader,
             entry_point: Some("main"),
-            compilation_options: Default::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[
+                    ("points".to_owned(), info.data_info.rows.into()),
+                    ("k".to_owned(), info.knn_info.cols.into()),
+                    ("candidates".to_owned(), info.candidates.into()),
+                ].into(), ..Default::default()},
             cache: None,
         });
 

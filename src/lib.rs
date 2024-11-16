@@ -24,9 +24,9 @@ pub struct WsglArray2Info {
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 #[repr(C)]
 pub struct WsglArgs {
-    data_info: WsglArray2Info,
-    knn_info: WsglArray2Info,
-    candidates: u32,
+    pub data_info: WsglArray2Info,
+    pub knn_info: WsglArray2Info,
+    pub candidates: u32,
 }
 
 pub fn cli_npy(idx: usize) -> (WsglArray2Info, Vec<f32>) {
