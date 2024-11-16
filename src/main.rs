@@ -1,17 +1,11 @@
-use wgpu_nnd::cli_npy;
+use wgpu_nnd::cli;
 use std::mem::size_of_val;
 use wgpu::util::DeviceExt;
 
 async fn run() {
-    let (local_c, mut input_a) = cli_npy(1);
-    let local_a = input_a.as_mut_slice();
-    log::info!("Input a: {local_a:?}");
-    let mut input_b = Vec::with_capacity(local_a.len());
-    for i in 0..local_a.len() {
-        input_b.push(i as u32);
-    }
-    let local_b = input_b.as_mut_slice();
-    log::info!("Input b: {local_b:?}");
+    let (info, mut data_input, mut knn_input) = cli();
+    let data = data_input.as_mut_slice();
+    let knn = knn_input.as_mut_slice();
     let instance = wgpu::Instance::default();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
@@ -33,27 +27,27 @@ async fn run() {
     let shader = device.create_shader_module(
         wgpu::include_wgsl!("shader.wgsl"));
 
-    let storage_buffer_a = device.create_buffer_init(
+    let storage_buffer_info = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&local_a[..]),
+            contents: bytemuck::bytes_of(&info),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
-    let storage_buffer_b = device.create_buffer_init(
+    let storage_buffer_data = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&local_b[..]),
+            contents: bytemuck::cast_slice(&data[..]),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
-    let storage_buffer_c = device.create_buffer_init(
+    let storage_buffer_knn = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::bytes_of(&local_c),
+            contents: bytemuck::cast_slice(&knn[..]),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: size_of_val(local_b) as u64,
+        size: size_of_val(knn) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -106,15 +100,15 @@ async fn run() {
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: storage_buffer_c.as_entire_binding(),
+                resource: storage_buffer_info.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: storage_buffer_a.as_entire_binding(),
+                resource: storage_buffer_data.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: storage_buffer_b.as_entire_binding(),
+                resource: storage_buffer_knn.as_entire_binding(),
             },
         ],
     });
@@ -147,22 +141,22 @@ async fn run() {
             });
         compute_pass.set_pipeline(&pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
-        compute_pass.dispatch_workgroups(local_a.len() as u32, 1, 1);
+        compute_pass.dispatch_workgroups(data.len() as u32, 1, 1);
     }
     queue.submit(Some(command_encoder.finish()));
 
     //----------------------------------------------------------
 
     get_data(
-        &mut local_b[..],
-        &storage_buffer_b,
+        &mut knn[..],
+        &storage_buffer_knn,
         &output_staging_buffer,
         &device,
         &queue,
     )
     .await;
 
-    log::info!("Output: {local_b:?}");
+    log::info!("Output: {knn:?}");
 }
 
 async fn get_data<T: bytemuck::Pod>(

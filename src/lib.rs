@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::{fs::File, str::FromStr};
 use ndarray::Array2;
 use ndarray_npy::ReadNpyExt;
 use bytemuck_derive::{Pod, Zeroable};
@@ -21,28 +21,57 @@ pub struct WsglArray2Info {
     pub col_strides: u32,
 }
 
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+#[repr(C)]
+pub struct WsglArgs {
+    data_info: WsglArray2Info,
+    knn_info: WsglArray2Info,
+    candidates: u32,
+}
+
 pub fn cli_npy(idx: usize) -> (WsglArray2Info, Vec<f32>) {
     let path = std::env::args().skip(idx).next().expect(
         "missing cli argument for npy file");
     WsglArray2Info::new(raw_npy(path))
 }
 
+pub fn cli() -> (WsglArgs, Vec<f32>, Vec<u32>) {
+    let (data_info, data_input) = cli_npy(1);
+    let numbers_input: Vec<usize> = std::env::args().skip(2).take(2).map(
+        |s| usize::from_str(&s).expect("missing args")).collect();
+    let (k, candidates) = (numbers_input[0], numbers_input[1]);
+    let knn_init = RawArray2::new(
+        Array2::<u32>::zeros((data_info.rows as usize, k)));
+    let (knn_info, knn_input) = WsglArray2Info::new(knn_init);
+    (WsglArgs {
+        data_info: data_info,
+        knn_info: knn_info,
+        candidates: candidates as u32,
+    }, data_input, knn_input)
+}
+
 fn raw_npy(path: String) -> RawArray2<f32> {
     let reader = File::open(path).expect("IO error");
     let arr = Array2::<f32>::read_npy(reader).expect("npy format error");
-    let shape = <Vec<usize> as TryInto<[usize; 2]>>::try_into(
-        arr.shape().to_owned()).unwrap();
-    let strides = <Vec<isize> as TryInto<[isize; 2]>>::try_into(
-        arr.strides().to_owned()).unwrap();
-    let (v, offset) = arr.into_raw_vec_and_offset();
-    RawArray2 {
-        offset: match offset {
-            None => 0,
-            _ => offset.unwrap().try_into().unwrap(),
-        },
-        shape: shape.map(|x| x as u32),
-        strides: strides.map(|x| x as u32),
-        data: v
+    RawArray2::new(arr)
+}
+
+impl<T> RawArray2<T> {
+    fn new(arr: Array2<T>) -> Self {
+        let shape = <Vec<usize> as TryInto<[usize; 2]>>::try_into(
+            arr.shape().to_owned()).unwrap();
+        let strides = <Vec<isize> as TryInto<[isize; 2]>>::try_into(
+            arr.strides().to_owned()).unwrap();
+        let (v, offset) = arr.into_raw_vec_and_offset();
+        RawArray2 {
+            offset: match offset {
+                None => 0,
+                _ => offset.unwrap().try_into().unwrap(),
+            },
+            shape: shape.map(|x| x as u32),
+            strides: strides.map(|x| x as u32),
+            data: v
+        }
     }
 }
 
