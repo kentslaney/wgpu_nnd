@@ -1,11 +1,14 @@
-use wgpu_nnd::cli;
+use wgpu_nnd::{ cli, WsglSlices };
 use std::mem::size_of_val;
 use wgpu::util::DeviceExt;
 
 async fn run() {
-    let (info, mut data_input, mut knn_input) = cli();
-    let data = data_input.as_mut_slice();
-    let knn = knn_input.as_mut_slice();
+    let (info, mut buffers_input) = cli();
+    let knn = buffers_input.knn.as_mut_slice();
+    let data = buffers_input.data.as_mut_slice();
+    let buffers = WsglSlices {
+        distances: buffers_input.distances.as_mut_slice(),
+    };
     let instance = wgpu::Instance::default();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
@@ -37,6 +40,12 @@ async fn run() {
         &wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&data[..]),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        });
+    let storage_buffer_distances = device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&buffers.distances[..]),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
     let storage_buffer_knn = device.create_buffer_init(
@@ -92,6 +101,18 @@ async fn run() {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage {
+                            read_only: false
+                        },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -108,6 +129,10 @@ async fn run() {
             },
             wgpu::BindGroupEntry {
                 binding: 2,
+                resource: storage_buffer_distances.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
                 resource: storage_buffer_knn.as_entire_binding(),
             },
         ],
@@ -127,7 +152,6 @@ async fn run() {
             entry_point: Some("main"),
             compilation_options: wgpu::PipelineCompilationOptions {
                 constants: &[
-                    ("points".to_owned(), info.data_info.rows.into()),
                     ("k".to_owned(), info.knn_info.cols.into()),
                     ("candidates".to_owned(), info.candidates.into()),
                 ].into(), ..Default::default()},
@@ -161,7 +185,7 @@ async fn run() {
     )
     .await;
 
-    log::info!("Output: {knn:?}");
+    log::info!("Output: {:?}", knn);
 }
 
 async fn get_data<T: bytemuck::Pod>(

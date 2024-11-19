@@ -26,7 +26,18 @@ pub struct WsglArray2Info {
 pub struct WsglArgs {
     pub data_info: WsglArray2Info,
     pub knn_info: WsglArray2Info,
+    pub distances_info: WsglArray2Info,
     pub candidates: u32,
+}
+
+pub struct WsglBuffers {
+    pub data: Vec<f32>,
+    pub knn: Vec<i32>,
+    pub distances: Vec<f32>,
+}
+
+pub struct WsglSlices<'a> {
+    pub distances: &'a [f32],
 }
 
 pub fn cli_npy(idx: usize) -> (WsglArray2Info, Vec<f32>) {
@@ -35,19 +46,27 @@ pub fn cli_npy(idx: usize) -> (WsglArray2Info, Vec<f32>) {
     WsglArray2Info::new(raw_npy(path))
 }
 
-pub fn cli() -> (WsglArgs, Vec<f32>, Vec<u32>) {
+pub fn cli() -> (WsglArgs, WsglBuffers) {
     let (data_info, data_input) = cli_npy(1);
     let numbers_input: Vec<usize> = std::env::args().skip(2).take(2).map(
         |s| usize::from_str(&s).expect("missing args")).collect();
     let (k, candidates) = (numbers_input[0], numbers_input[1]);
     let knn_init = RawArray2::new(
-        Array2::<u32>::zeros((data_info.rows as usize, k)));
+        -Array2::<i32>::ones((data_info.rows as usize, k)));
+    let distances_init = RawArray2::new(
+        Array2::<f32>::from_elem((data_info.rows as usize, k), f32::INFINITY));
     let (knn_info, knn_input) = WsglArray2Info::new(knn_init);
+    let (distances_info, distances_input) = WsglArray2Info::new(distances_init);
     (WsglArgs {
         data_info: data_info,
         knn_info: knn_info,
+        distances_info: distances_info,
         candidates: candidates as u32,
-    }, data_input, knn_input)
+    }, WsglBuffers {
+        data: data_input,
+        knn: knn_input,
+        distances: distances_input,
+    })
 }
 
 fn raw_npy(path: String) -> RawArray2<f32> {

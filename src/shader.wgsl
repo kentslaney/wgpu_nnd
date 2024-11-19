@@ -9,17 +9,157 @@ struct Array2Info {
 struct HostInterface {
     data_info: Array2Info,
     knn_info: Array2Info,
+    distances_info: Array2Info,
     candidates: u32,
 }
 
-@group(0) @binding(0) var<storage, read>       info: HostInterface;
-@group(0) @binding(1) var<storage, read>       data: array<f32>;
-@group(0) @binding(2) var<storage, read_write> knn:  array<u32>;
+// max_bind_groups with wgpu is 4
+@group(0) @binding(0) var<storage, read>       info:      HostInterface;
+@group(0) @binding(1) var<storage, read>       data:      array<f32>;
+@group(0) @binding(2) var<storage, read_write> distances: array<f32>;
+@group(0) @binding(3) var<storage, read_write> knn:       array<i32>;
 
-override points: u32 = 0u;
-override k: u32 = 0u;
-override candidates: u32 = 0u;
+override k: u32 = 15u;
+override candidates: u32 = 15u;
 override seed: u32 = 0u;
+
+fn data_get(row: u32, col: u32) -> f32 {
+    return data[
+        info.data_info.offset +
+        row * info.data_info.row_strides +
+        col * info.data_info.col_strides];
+}
+
+fn distances_get(row: u32, col: u32) -> f32 {
+    return distances[
+        info.distances_info.offset +
+        row * info.distances_info.row_strides +
+        col * info.distances_info.col_strides];
+}
+
+fn knn_get(row: u32, col: u32) -> i32 {
+    return knn[
+        info.knn_info.offset +
+        row * info.knn_info.row_strides +
+        col * info.knn_info.col_strides] % i32(info.knn_info.rows);
+}
+
+fn flag_get(row: u32, col: u32) -> bool {
+    return knn[
+        info.knn_info.offset +
+        row * info.knn_info.row_strides +
+        col * info.knn_info.col_strides] >= i32(info.knn_info.rows);
+}
+
+fn distances_set(row: u32, col: u32, value: f32) {
+    distances[
+        info.distances_info.offset +
+        row * info.distances_info.row_strides +
+        col * info.distances_info.col_strides] = value;
+}
+
+fn knn_flag_set(row: u32, col: u32, index: i32, flag: bool) {
+    var value = index;
+    if (flag) {
+        value += i32(info.knn_info.rows);
+    }
+    knn[
+        info.knn_info.offset +
+        row * info.knn_info.row_strides +
+        col * info.knn_info.col_strides] = value;
+}
+
+fn flag_reset(row: u32, col: u32) {
+    knn[
+            info.knn_info.offset +
+            row * info.knn_info.row_strides +
+            col * info.knn_info.col_strides
+        ] = knn[
+            info.knn_info.offset +
+            row * info.knn_info.row_strides +
+            col * info.knn_info.col_strides
+        ] % i32(info.knn_info.rows);
+}
+
+fn index_swap(row: u32, col0: u32, col1: u32) {
+    let idx0 = knn[
+        info.knn_info.offset +
+        row * info.knn_info.row_strides +
+        col0 * info.knn_info.col_strides];
+    let idx1 = knn[
+        info.knn_info.offset +
+        row * info.knn_info.row_strides +
+        col1 * info.knn_info.col_strides];
+    knn[
+        info.knn_info.offset +
+        row * info.knn_info.row_strides +
+        col0 * info.knn_info.col_strides] = idx1;
+    knn[
+        info.knn_info.offset +
+        row * info.knn_info.row_strides +
+        col1 * info.knn_info.col_strides] = idx0;
+
+    let dist0 = distances[
+        info.distances_info.offset +
+        row * info.distances_info.row_strides +
+        col0 * info.distances_info.col_strides];
+    let dist1 = distances[
+        info.distances_info.offset +
+        row * info.distances_info.row_strides +
+        col1 * info.distances_info.col_strides];
+    distances[
+        info.distances_info.offset +
+        row * info.distances_info.row_strides +
+        col0 * info.distances_info.col_strides] = dist1;
+    distances[
+        info.distances_info.offset +
+        row * info.distances_info.row_strides +
+        col1 * info.distances_info.col_strides] = dist0;
+}
+
+fn sifted(row: u32) {
+    var col = 0u;
+    while (col * 2 + 1 < k) {
+        let left = col * 2 + 1;
+        let right = left + 1;
+        var swap = col;
+        if (distances_get(row, swap) < distances_get(row, left)) {
+            swap = left;
+        }
+        if (right < k && distances_get(row, swap) < distances_get(row, right)) {
+            swap = right;
+        }
+        if (swap == col) { break; }
+        index_swap(row, col, swap);
+        col = swap;
+    }
+}
+
+fn check(row: u32, index: i32) -> bool {
+    for (var i = 0u; i < k; i++) {
+        if (index == knn_get(row, i)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn distance(row0: u32, row1: u32) -> f32 {
+    var total = 0.;
+    for (var i = 0u; i < k; i++) {
+        total += pow(data_get(row0, i) - data_get(row1, i), 2.);
+    }
+    return total;
+}
+
+fn push(row: u32, candidate: i32) {
+    let dist = distance(row, u32(candidate));
+    if (distances_get(row, 0) <= dist) { return; }
+    if (check(row, candidate)) { return; }
+    distances_set(row, 0, dist);
+    knn_flag_set(row, 0, candidate, true);
+    sifted(row);
+}
 
 fn rotate_left(x: u32, d: u32) -> u32 {
     return x << d | x >> (32 - d);
@@ -57,6 +197,6 @@ fn threefry2x32(k: vec2u, x: vec2u) -> vec2u {
 @workgroup_size(1)
 fn main(@builtin(workgroup_id) wid: vec3u) {
     if data[wid.x] > 0.5 {
-        knn[wid.x] += threefry2x32(vec2u(0, 0), vec2u(0, wid.x)).x;
+        knn[wid.x] += i32(candidates);
     }
 }
