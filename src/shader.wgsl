@@ -38,10 +38,15 @@ fn distances_get(row: u32, col: u32) -> f32 {
 }
 
 fn knn_get(row: u32, col: u32) -> i32 {
-    return knn[
+    let res = knn[
         info.knn_info.offset +
         row * info.knn_info.row_strides +
-        col * info.knn_info.col_strides] % i32(info.knn_info.rows);
+        col * info.knn_info.col_strides];
+    if res >= i32(info.knn_info.rows) {
+        return res - i32(info.knn_info.rows);
+    } else {
+        return res;
+    }
 }
 
 fn flag_get(row: u32, col: u32) -> bool {
@@ -153,6 +158,7 @@ fn distance(row0: u32, row1: u32) -> f32 {
 }
 
 fn push(row: u32, candidate: i32) {
+    if (row == u32(candidate)) { return; }
     let dist = distance(row, u32(candidate));
     if (distances_get(row, 0u) <= dist) { return; }
     if (check(row, candidate)) { return; }
@@ -197,7 +203,7 @@ fn bitcast_mantissa(x: u32) -> f32 {
     return bitcast<f32>(0x007FFFFF & x) - 1.;
 }
 
-// big endian
+// big endian; necessary to guarantee span << rng result
 fn big_mod(x: vec2u, span: u32) -> u32 {
     var carry = 0u;
     let mul_ = 0x00010000 % span;
@@ -207,10 +213,19 @@ fn big_mod(x: vec2u, span: u32) -> u32 {
     return carry;
 }
 
+fn randomize(rng: vec2u, row: u32) {
+    let points = info.data_info.rows;
+    for (var i = 0u; knn_get(row, 0u) == -1; i++) {
+        push(row, i32(big_mod(threefry2x32(rng, vec2u(0u, i)), points)));
+    }
+}
+
 @compute
 @workgroup_size(1)
 fn main(@builtin(workgroup_id) wid: vec3u) {
-    if data[wid.x] > 0.5 {
-        knn[wid.x] += i32(candidates);
+    let rng = threefry2x32(vec2u(0, seed), vec2u(0, wid.x));
+    randomize(rng, wid.x);
+    for (var i = 0u; i < k; i++) {
+        flag_reset(wid.x, i);
     }
 }

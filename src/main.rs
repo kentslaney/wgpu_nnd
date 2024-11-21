@@ -170,7 +170,7 @@ async fn run() {
             });
         compute_pass.set_pipeline(&pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
-        compute_pass.dispatch_workgroups(data.len() as u32, 1, 1);
+        compute_pass.dispatch_workgroups(info.data_info.rows, 1, 1);
     }
     queue.submit(Some(command_encoder.finish()));
 
