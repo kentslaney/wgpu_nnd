@@ -30,12 +30,6 @@ async fn run() {
     let shader = device.create_shader_module(
         wgpu::include_wgsl!("shader.wgsl"));
 
-    let storage_buffer_info = device.create_buffer_init(
-        &wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::bytes_of(&info),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        });
     let storage_buffer_data = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
@@ -82,7 +76,7 @@ async fn run() {
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage {
-                            read_only: true
+                            read_only: false
                         },
                         has_dynamic_offset: false,
                         min_binding_size: None,
@@ -101,18 +95,6 @@ async fn run() {
                     },
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage {
-                            read_only: false
-                        },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
             ],
         });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -121,18 +103,14 @@ async fn run() {
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: storage_buffer_info.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
                 resource: storage_buffer_data.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 2,
+                binding: 1,
                 resource: storage_buffer_distances.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 3,
+                binding: 2,
                 resource: storage_buffer_knn.as_entire_binding(),
             },
         ],
@@ -144,17 +122,34 @@ async fn run() {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
+    let pipeline_options = wgpu::PipelineCompilationOptions {
+        constants: &[
+            ("k".to_owned(), info.knn_info.cols.into()),
+            ("candidates".to_owned(), info.candidates.into()),
+            ("ndim".to_owned(), info.data_info.cols.into()),
+            ("points".to_owned(), info.data_info.rows.into()),
+
+            ("data_offset".to_owned(), info.data_info.offset.into()),
+            ("data_row_strides".to_owned(), info.data_info.row_strides.into()),
+            ("data_col_strides".to_owned(), info.data_info.col_strides.into()),
+
+            ("distances_offset".to_owned(), info.distances_info.offset.into()),
+            ("distances_row_strides".to_owned(),
+                info.distances_info.row_strides.into()),
+            ("distances_col_strides".to_owned(),
+                info.distances_info.col_strides.into()),
+
+            ("knn_offset".to_owned(), info.knn_info.offset.into()),
+            ("knn_row_strides".to_owned(), info.knn_info.row_strides.into()),
+            ("knn_col_strides".to_owned(), info.knn_info.col_strides.into()),
+        ].into(), ..Default::default()};
     let pipeline = device.create_compute_pipeline(
         &wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             module: &shader,
             entry_point: Some("main"),
-            compilation_options: wgpu::PipelineCompilationOptions {
-                constants: &[
-                    ("k".to_owned(), info.knn_info.cols.into()),
-                    ("candidates".to_owned(), info.candidates.into()),
-                ].into(), ..Default::default()},
+            compilation_options: pipeline_options,
             cache: None,
         });
 

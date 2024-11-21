@@ -1,49 +1,42 @@
-struct Array2Info {
-    offset: u32,
-    rows: u32,
-    cols: u32,
-    row_strides: u32,
-    col_strides: u32,
-}
-
-struct HostInterface {
-    data_info: Array2Info,
-    knn_info: Array2Info,
-    distances_info: Array2Info,
-    candidates: u32,
-}
-
 // max_bind_groups with wgpu is 4
-@group(0) @binding(0) var<storage, read>       info:      HostInterface;
-@group(0) @binding(1) var<storage, read>       data:      array<f32>;
-@group(0) @binding(2) var<storage, read_write> distances: array<f32>;
-@group(0) @binding(3) var<storage, read_write> knn:       array<i32>;
+@group(0) @binding(0) var<storage, read>       data:      array<f32>;
+@group(0) @binding(1) var<storage, read_write> distances: array<f32>;
+@group(0) @binding(2) var<storage, read_write> knn:       array<i32>;
 
 override k: u32 = 15u;
 override candidates: u32 = 15u;
 override seed: u32 = 0u;
 
+override ndim: u32 = 0u;
+override points: u32 = 0u;
+
+override data_offset = 0u;
+override data_row_strides = 0u;
+override data_col_strides = 0u;
+
+override distances_offset = 0u;
+override distances_row_strides = 0u;
+override distances_col_strides = 0u;
+
+override knn_offset = 0u;
+override knn_row_strides = 0u;
+override knn_col_strides = 0u;
+
 fn data_get(row: u32, col: u32) -> f32 {
-    return data[
-        info.data_info.offset +
-        row * info.data_info.row_strides +
-        col * info.data_info.col_strides];
+    return data[data_offset + row * data_row_strides + col * data_col_strides];
 }
 
 fn distances_get(row: u32, col: u32) -> f32 {
     return distances[
-        info.distances_info.offset +
-        row * info.distances_info.row_strides +
-        col * info.distances_info.col_strides];
+        distances_offset +
+        row * distances_row_strides +
+        col * distances_col_strides];
 }
 
 fn knn_get(row: u32, col: u32) -> i32 {
-    let res = knn[
-        info.knn_info.offset +
-        row * info.knn_info.row_strides +
-        col * info.knn_info.col_strides];
-    if res >= i32(info.knn_info.rows) {
-        return res - i32(info.knn_info.rows);
+    let res = knn[knn_offset + row * knn_row_strides + col * knn_col_strides];
+    if res >= i32(points) {
+        return res - i32(points);
     } else {
         return res;
     }
@@ -51,75 +44,60 @@ fn knn_get(row: u32, col: u32) -> i32 {
 
 fn flag_get(row: u32, col: u32) -> bool {
     return knn[
-        info.knn_info.offset +
-        row * info.knn_info.row_strides +
-        col * info.knn_info.col_strides] >= i32(info.knn_info.rows);
+        knn_offset +
+        row * knn_row_strides +
+        col * knn_col_strides] >= i32(points);
 }
 
 fn distances_set(row: u32, col: u32, value: f32) {
     distances[
-        info.distances_info.offset +
-        row * info.distances_info.row_strides +
-        col * info.distances_info.col_strides] = value;
+        distances_offset +
+        row * distances_row_strides +
+        col * distances_col_strides] = value;
 }
 
 fn knn_flag_set(row: u32, col: u32, index: i32, flag: bool) {
     var value = index;
     if (flag) {
-        value += i32(info.knn_info.rows);
+        value += i32(points);
     }
-    knn[
-        info.knn_info.offset +
-        row * info.knn_info.row_strides +
-        col * info.knn_info.col_strides] = value;
+    knn[knn_offset + row * knn_row_strides + col * knn_col_strides] = value;
 }
 
 fn flag_reset(row: u32, col: u32) {
     knn[
-            info.knn_info.offset +
-            row * info.knn_info.row_strides +
-            col * info.knn_info.col_strides
+            knn_offset +
+            row * knn_row_strides +
+            col * knn_col_strides
         ] = knn[
-            info.knn_info.offset +
-            row * info.knn_info.row_strides +
-            col * info.knn_info.col_strides
-        ] % i32(info.knn_info.rows);
+            knn_offset +
+            row * knn_row_strides +
+            col * knn_col_strides
+        ] % i32(points);
 }
 
 fn index_swap(row: u32, col0: u32, col1: u32) {
-    let idx0 = knn[
-        info.knn_info.offset +
-        row * info.knn_info.row_strides +
-        col0 * info.knn_info.col_strides];
-    let idx1 = knn[
-        info.knn_info.offset +
-        row * info.knn_info.row_strides +
-        col1 * info.knn_info.col_strides];
-    knn[
-        info.knn_info.offset +
-        row * info.knn_info.row_strides +
-        col0 * info.knn_info.col_strides] = idx1;
-    knn[
-        info.knn_info.offset +
-        row * info.knn_info.row_strides +
-        col1 * info.knn_info.col_strides] = idx0;
+    let idx0 = knn[knn_offset + row * knn_row_strides + col0 * knn_col_strides];
+    let idx1 = knn[knn_offset + row * knn_row_strides + col1 * knn_col_strides];
+    knn[knn_offset + row * knn_row_strides + col0 * knn_col_strides] = idx1;
+    knn[knn_offset + row * knn_row_strides + col1 * knn_col_strides] = idx0;
 
     let dist0 = distances[
-        info.distances_info.offset +
-        row * info.distances_info.row_strides +
-        col0 * info.distances_info.col_strides];
+        distances_offset +
+        row * distances_row_strides +
+        col0 * distances_col_strides];
     let dist1 = distances[
-        info.distances_info.offset +
-        row * info.distances_info.row_strides +
-        col1 * info.distances_info.col_strides];
+        distances_offset +
+        row * distances_row_strides +
+        col1 * distances_col_strides];
     distances[
-        info.distances_info.offset +
-        row * info.distances_info.row_strides +
-        col0 * info.distances_info.col_strides] = dist1;
+        distances_offset +
+        row * distances_row_strides +
+        col0 * distances_col_strides] = dist1;
     distances[
-        info.distances_info.offset +
-        row * info.distances_info.row_strides +
-        col1 * info.distances_info.col_strides] = dist0;
+        distances_offset +
+        row * distances_row_strides +
+        col1 * distances_col_strides] = dist0;
 }
 
 fn sifted(row: u32) {
@@ -214,7 +192,6 @@ fn big_mod(x: vec2u, span: u32) -> u32 {
 }
 
 fn randomize(rng: vec2u, row: u32) {
-    let points = info.data_info.rows;
     for (var i = 0u; knn_get(row, 0u) == -1; i++) {
         push(row, i32(big_mod(threefry2x32(rng, vec2u(0u, i)), points)));
     }
