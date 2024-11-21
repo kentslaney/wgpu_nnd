@@ -154,10 +154,10 @@ fn distance(row0: u32, row1: u32) -> f32 {
 
 fn push(row: u32, candidate: i32) {
     let dist = distance(row, u32(candidate));
-    if (distances_get(row, 0) <= dist) { return; }
+    if (distances_get(row, 0u) <= dist) { return; }
     if (check(row, candidate)) { return; }
-    distances_set(row, 0, dist);
-    knn_flag_set(row, 0, candidate, true);
+    distances_set(row, 0u, dist);
+    knn_flag_set(row, 0u, candidate, true);
     sifted(row);
 }
 
@@ -191,6 +191,20 @@ fn threefry2x32(k: vec2u, x: vec2u) -> vec2u {
         r0, k.x, k.y, 3u),
         r1, k.y,   j, 4u),
         r0,   j, k.x, 5u);
+}
+
+fn bitcast_mantissa(x: u32) -> f32 {
+    return bitcast<f32>(0x007FFFFF & x) - 1.;
+}
+
+// big endian
+fn big_mod(x: vec2u, span: u32) -> u32 {
+    var carry = 0u;
+    let mul_ = 0x00010000 % span;
+    let mul = (mul_ * mul_) % span;
+    carry = ((carry * mul) % span + (x.x % span)) % span;
+    carry = ((carry * mul) % span + (x.y % span)) % span;
+    return carry;
 }
 
 @compute
