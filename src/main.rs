@@ -9,6 +9,7 @@ async fn run() {
     let buffers = WsglSlices {
         distances: buffers_input.distances.as_mut_slice(),
         scratch: buffers_input.scratch.as_mut_slice(),
+        avl: buffers_input.avl.as_mut_slice(),
     };
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -58,7 +59,8 @@ async fn run() {
     let storage_buffer_scratch = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&buffers.scratch[..]),
+            contents: bytemuck::cast_slice(&[
+                &buffers.scratch[..], &buffers.avl].concat()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
 
@@ -171,6 +173,14 @@ async fn run() {
                 info.scratch_info.row_strides.into()),
             ("scratch_col_strides".to_owned(),
                 info.scratch_info.col_strides.into()),
+
+            ("avl_offset".to_owned(), (
+                    info.avl_info.offset +
+                    info.scratch_info.row_strides * info.scratch_info.rows
+                ).into()),
+            ("avl_row_strides".to_owned(), info.avl_info.row_strides.into()),
+            ("avl_col_strides".to_owned(), info.avl_info.col_strides.into()),
+            ("avl_vox_strides".to_owned(), info.avl_info.vox_strides.into()),
         ].into(), ..Default::default()};
     let pipeline = device.create_compute_pipeline(
         &wgpu::ComputePipelineDescriptor {

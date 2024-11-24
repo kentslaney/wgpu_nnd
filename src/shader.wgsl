@@ -27,6 +27,11 @@ override scratch_offset = 0u;
 override scratch_row_strides = 0u;
 override scratch_col_strides = 0u;
 
+override avl_offset = 0u;
+override avl_row_strides = 0u;
+override avl_col_strides = 0u;
+override avl_vox_strides = 0u;
+
 fn data_get(row: u32, col: u32) -> f32 {
     return data[data_offset + row * data_row_strides + col * data_col_strides];
 }
@@ -57,6 +62,22 @@ fn scratch_set(row: u32, col: u32, value: i32) {
         scratch_offset +
         row * scratch_row_strides +
         col * scratch_col_strides] = value;
+}
+
+fn avl_get(row: u32, col: u32, vox: u32) -> i32 {
+    return scratch[
+        avl_offset +
+        row * avl_row_strides +
+        col * avl_col_strides +
+        vox * avl_vox_strides];
+}
+
+fn avl_set(row: u32, col: u32, vox: u32, value: i32) {
+    scratch[
+        avl_offset +
+        row * avl_row_strides +
+        col * avl_col_strides +
+        vox * avl_vox_strides] = value;
 }
 
 fn knn_get(row: u32, col: u32) -> i32 {
