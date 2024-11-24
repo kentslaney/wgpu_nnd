@@ -2,6 +2,7 @@
 @group(0) @binding(0) var<storage, read>       data:      array<f32>;
 @group(0) @binding(1) var<storage, read_write> distances: array<f32>;
 @group(0) @binding(2) var<storage, read_write> knn:       array<i32>;
+@group(0) @binding(2) var<storage, read_write> scratch:   array<i32>;
 
 override k: u32 = 15u;
 override candidates: u32 = 15u;
@@ -22,6 +23,10 @@ override knn_offset = 0u;
 override knn_row_strides = 0u;
 override knn_col_strides = 0u;
 
+override scratch_offset = 0u;
+override scratch_row_strides = 0u;
+override scratch_col_strides = 0u;
+
 fn data_get(row: u32, col: u32) -> f32 {
     return data[data_offset + row * data_row_strides + col * data_col_strides];
 }
@@ -31,6 +36,27 @@ fn distances_get(row: u32, col: u32) -> f32 {
         distances_offset +
         row * distances_row_strides +
         col * distances_col_strides];
+}
+
+fn distances_set(row: u32, col: u32, value: f32) {
+    distances[
+        distances_offset +
+        row * distances_row_strides +
+        col * distances_col_strides] = value;
+}
+
+fn scratch_get(row: u32, col: u32) -> i32 {
+    return scratch[
+        scratch_offset +
+        row * scratch_row_strides +
+        col * scratch_col_strides];
+}
+
+fn scratch_set(row: u32, col: u32, value: i32) {
+    scratch[
+        scratch_offset +
+        row * scratch_row_strides +
+        col * scratch_col_strides] = value;
 }
 
 fn knn_get(row: u32, col: u32) -> i32 {
@@ -47,13 +73,6 @@ fn flag_get(row: u32, col: u32) -> bool {
         knn_offset +
         row * knn_row_strides +
         col * knn_col_strides] >= i32(points);
-}
-
-fn distances_set(row: u32, col: u32, value: f32) {
-    distances[
-        distances_offset +
-        row * distances_row_strides +
-        col * distances_col_strides] = value;
 }
 
 fn knn_flag_set(row: u32, col: u32, index: i32, flag: bool) {

@@ -8,6 +8,7 @@ async fn run() {
     let data = buffers_input.data.as_mut_slice();
     let buffers = WsglSlices {
         distances: buffers_input.distances.as_mut_slice(),
+        scratch: buffers_input.scratch.as_mut_slice(),
     };
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -54,6 +55,12 @@ async fn run() {
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
+    let storage_buffer_scratch = device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&buffers.scratch[..]),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        });
 
     let bind_group_layout = device.create_bind_group_layout(
         &wgpu::BindGroupLayoutDescriptor {
@@ -95,6 +102,18 @@ async fn run() {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage {
+                            read_only: false
+                        },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -112,6 +131,10 @@ async fn run() {
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: storage_buffer_knn.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: storage_buffer_scratch.as_entire_binding(),
             },
         ],
     });
@@ -142,6 +165,12 @@ async fn run() {
             ("knn_offset".to_owned(), info.knn_info.offset.into()),
             ("knn_row_strides".to_owned(), info.knn_info.row_strides.into()),
             ("knn_col_strides".to_owned(), info.knn_info.col_strides.into()),
+
+            ("scratch_offset".to_owned(), info.scratch_info.offset.into()),
+            ("scratch_row_strides".to_owned(),
+                info.scratch_info.row_strides.into()),
+            ("scratch_col_strides".to_owned(),
+                info.scratch_info.col_strides.into()),
         ].into(), ..Default::default()};
     let pipeline = device.create_compute_pipeline(
         &wgpu::ComputePipelineDescriptor {
@@ -184,7 +213,7 @@ async fn run() {
 }
 
 async fn get_data<T: bytemuck::Pod>(
-    output: &mut [T]  ,
+    output: &mut [T],
     storage_buffer: &wgpu::Buffer,
     staging_buffer: &wgpu::Buffer,
     device: &wgpu::Device,

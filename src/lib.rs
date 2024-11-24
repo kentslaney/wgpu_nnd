@@ -27,6 +27,7 @@ pub struct WsglArgs {
     pub data_info: WsglArray2Info,
     pub knn_info: WsglArray2Info,
     pub distances_info: WsglArray2Info,
+    pub scratch_info: WsglArray2Info,
     pub candidates: u32,
 }
 
@@ -34,10 +35,12 @@ pub struct WsglBuffers {
     pub data: Vec<f32>,
     pub knn: Vec<i32>,
     pub distances: Vec<f32>,
+    pub scratch: Vec<i32>,
 }
 
 pub struct WsglSlices<'a> {
     pub distances: &'a [f32],
+    pub scratch: &'a [i32],
 }
 
 pub fn cli_npy(idx: usize) -> (WsglArray2Info, Vec<f32>) {
@@ -55,17 +58,22 @@ pub fn cli() -> (WsglArgs, WsglBuffers) {
         -Array2::<i32>::ones((data_info.rows as usize, k)));
     let distances_init = RawArray2::new(
         Array2::<f32>::from_elem((data_info.rows as usize, k), f32::INFINITY));
+    let scratch_init = RawArray2::new(
+        -Array2::<i32>::ones((data_info.rows as usize, candidates)));
     let (knn_info, knn_input) = WsglArray2Info::new(knn_init);
     let (distances_info, distances_input) = WsglArray2Info::new(distances_init);
+    let (scratch_info, scratch_input) = WsglArray2Info::new(scratch_init);
     (WsglArgs {
         data_info: data_info,
         knn_info: knn_info,
         distances_info: distances_info,
+        scratch_info: scratch_info,
         candidates: candidates as u32,
     }, WsglBuffers {
         data: data_input,
         knn: knn_input,
         distances: distances_input,
+        scratch: scratch_input,
     })
 }
 
