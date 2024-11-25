@@ -56,6 +56,9 @@ async fn run() {
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
+    debug_assert!(
+        size_of_val(buffers.scratch) as u32 / 4 == info.avl_info.offset +
+        info.scratch_info.row_strides * info.scratch_info.rows);
     let storage_buffer_scratch = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
@@ -63,6 +66,15 @@ async fn run() {
                 &buffers.scratch[..], &buffers.avl].concat()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
+    #[cfg(debug_assertions)]
+    let scratch_size = size_of_val(buffers.scratch) + size_of_val(buffers.avl);
+    #[cfg(debug_assertions)]
+    let debug_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: scratch_size as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
 
     let bind_group_layout = device.create_bind_group_layout(
         &wgpu::BindGroupLayoutDescriptor {
@@ -218,8 +230,23 @@ async fn run() {
         &queue,
     )
     .await;
+    #[cfg(debug_assertions)]
+    let mut debug = unsafe {
+        Box::<[i32]>::new_uninit_slice(scratch_size / 4).assume_init()
+    };
+    #[cfg(debug_assertions)]
+    get_data(
+        &mut debug[..],
+        &storage_buffer_scratch,
+        &debug_staging_buffer,
+        &device,
+        &queue,
+    )
+    .await;
 
     log::info!("Output: {:?}", knn);
+    #[cfg(debug_assertions)]
+    log::info!("Scratch: {:?}", debug);
 }
 
 async fn get_data<T: bytemuck::Pod>(
