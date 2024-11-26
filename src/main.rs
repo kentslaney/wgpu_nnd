@@ -10,6 +10,7 @@ async fn run() {
         distances: buffers_input.distances.as_mut_slice(),
         scratch: buffers_input.scratch.as_mut_slice(),
         avl: buffers_input.avl.as_mut_slice(),
+        meta: buffers_input.meta.as_mut_slice(),
     };
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -59,15 +60,22 @@ async fn run() {
     debug_assert!(
         size_of_val(buffers.scratch) as u32 / 4 ==
         info.scratch_info.row_strides * info.scratch_info.rows);
+    debug_assert!(
+        size_of_val(buffers.avl) as u32 / 4 ==
+        info.avl_info.row_strides * info.avl_info.rows);
+    debug_assert!(
+        size_of_val(buffers.meta) as u32 / 4 ==
+        info.meta_info.row_strides * info.meta_info.rows);
     let storage_buffer_scratch = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&[
-                &buffers.scratch[..], &buffers.avl].concat()),
+                &buffers.scratch[..], &buffers.avl, &buffers.meta].concat()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
     #[cfg(debug_assertions)]
-    let scratch_size = size_of_val(buffers.scratch) + size_of_val(buffers.avl);
+    let scratch_size = size_of_val(buffers.scratch) + size_of_val(buffers.avl) +
+        size_of_val(buffers.meta);
     #[cfg(debug_assertions)]
     let debug_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
@@ -159,6 +167,10 @@ async fn run() {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
+    let avl_offset = info.avl_info.offset + info.scratch_info.offset +
+        info.scratch_info.row_strides * info.scratch_info.rows;
+    let meta_offset = avl_offset +
+        info.avl_info.row_strides * info.avl_info.rows;
     let pipeline_options = wgpu::PipelineCompilationOptions {
         constants: &[
             ("k".to_owned(), info.knn_info.cols.into()),
@@ -186,13 +198,14 @@ async fn run() {
             ("scratch_col_strides".to_owned(),
                 info.scratch_info.col_strides.into()),
 
-            ("avl_offset".to_owned(), (
-                    info.avl_info.offset +
-                    info.scratch_info.row_strides * info.scratch_info.rows
-                ).into()),
+            ("avl_offset".to_owned(), (avl_offset).into()),
             ("avl_row_strides".to_owned(), info.avl_info.row_strides.into()),
             ("avl_col_strides".to_owned(), info.avl_info.col_strides.into()),
             ("avl_vox_strides".to_owned(), info.avl_info.vox_strides.into()),
+
+            ("meta_offset".to_owned(), (meta_offset).into()),
+            ("meta_row_strides".to_owned(), info.meta_info.row_strides.into()),
+            ("meta_col_strides".to_owned(), info.meta_info.col_strides.into()),
         ].into(), ..Default::default()};
     let pipeline = device.create_compute_pipeline(
         &wgpu::ComputePipelineDescriptor {

@@ -49,6 +49,7 @@ pub struct WsglArgs {
     pub distances_info: WsglArray2Info,
     pub scratch_info: WsglArray2Info,
     pub avl_info: WsglArray3Info,
+    pub meta_info: WsglArray2Info,
     pub candidates: u32,
 }
 
@@ -58,12 +59,14 @@ pub struct WsglBuffers {
     pub distances: Vec<f32>,
     pub scratch: Vec<i32>,
     pub avl: Vec<i32>,
+    pub meta: Vec<i32>,
 }
 
 pub struct WsglSlices<'a> {
     pub distances: &'a [f32],
     pub scratch: &'a [i32],
     pub avl: &'a [i32],
+    pub meta: &'a [i32],
 }
 
 pub fn cli_npy(idx: usize) -> (WsglArray2Info, Vec<f32>) {
@@ -85,16 +88,20 @@ pub fn cli() -> (WsglArgs, WsglBuffers) {
         -Array2::<i32>::ones((data_info.rows as usize, candidates)));
     let avl_init = RawArray3::new(
         -Array3::<i32>::ones((data_info.rows as usize, k, 3)));
+    let meta_init = RawArray2::new(
+        -Array2::<i32>::ones((data_info.rows as usize, 2)));
     let (knn_info, knn_input) = WsglArray2Info::new(knn_init);
     let (distances_info, distances_input) = WsglArray2Info::new(distances_init);
     let (scratch_info, scratch_input) = WsglArray2Info::new(scratch_init);
     let (avl_info, avl_input) = WsglArray3Info::new(avl_init);
+    let (meta_info, meta_input) = WsglArray2Info::new(meta_init);
     (WsglArgs {
         data_info: data_info,
         knn_info: knn_info,
         distances_info: distances_info,
         scratch_info: scratch_info,
         avl_info: avl_info,
+        meta_info: meta_info,
         candidates: candidates as u32,
     }, WsglBuffers {
         data: data_input,
@@ -102,6 +109,7 @@ pub fn cli() -> (WsglArgs, WsglBuffers) {
         distances: distances_input,
         scratch: scratch_input,
         avl: avl_input,
+        meta: meta_input,
     })
 }
 
