@@ -58,13 +58,13 @@ async fn run() {
         mapped_at_creation: false,
     });
     debug_assert!(
-        size_of_val(buffers.scratch) as u32 / 4 ==
+        size_of_val(buffers.scratch) as u32 / 4 == info.scratch_info.offset +
         info.scratch_info.row_strides * info.scratch_info.rows);
     debug_assert!(
-        size_of_val(buffers.avl) as u32 / 4 ==
+        size_of_val(buffers.avl) as u32 / 4 == info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows);
     debug_assert!(
-        size_of_val(buffers.meta) as u32 / 4 ==
+        size_of_val(buffers.meta) as u32 / 4 == info.meta_info.offset +
         info.meta_info.row_strides * info.meta_info.rows);
     let storage_buffer_scratch = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
