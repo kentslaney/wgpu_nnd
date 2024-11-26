@@ -185,6 +185,84 @@ fn push(row: u32, candidate: i32) {
     sifted(row);
 }
 
+fn avl_depth(row: u32, col: i32) -> i32 {
+    if (col < 0) { return 0; }
+    let res = avl_get(row, u32(col), 0u);
+    if (res < 0) { return 0; }
+    return res;
+}
+
+fn avl_balance(row: u32, col: i32) -> i32 {
+    if (col < 0) { return 0; }
+    let l = avl_depth(row, avl_get(row, u32(col), 1u));
+    let r = avl_depth(row, avl_get(row, u32(col), 2u));
+    return l - r;
+}
+
+fn avl_measured(row: u32, col: i32) -> i32 {
+    if (col < 0) { return 0; }
+    let l = avl_depth(row, avl_get(row, u32(col), 1u));
+    let r = avl_depth(row, avl_get(row, u32(col), 2u));
+    return 1 + max(l, r);
+}
+
+fn avl_cmp(row: u32, col0: i32, col1: i32) -> i32 {
+    if (col0 < 0) {
+        if (col1 < 0) {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+    return avl_sign(
+        row, distances_get(row, u32(col0)), knn_get(row, u32(col0)), col1);
+}
+
+fn isclose(f0: f32, f1: f32) -> bool {
+    return abs(f0 - f1) / max(1e-5, abs(f0 + f1)) < 1e-5;
+}
+
+fn avl_sign(row: u32, primary: f32, secondary: i32, col: i32) -> i32 {
+    if (col < 0) { return -1; }
+    let col_primary = distances_get(row, u32(col));
+    if (isclose(primary, col_primary)) {
+        let col_secondary = knn_get(row, u32(col));
+        if (secondary == col_secondary) {
+            return 0;
+        } else if (secondary > col_secondary) {
+            return 1;
+        } else {
+            return -1;
+        }
+    } else if (primary > col_primary) {
+        return 1;
+    } else {
+        return -1;
+    }
+}
+
+fn avl_rotate_right(row: u32, y: u32) -> u32 {
+    let x = avl_get(row, y, 1u);
+    if (x < 0) { return y; }
+    let z = avl_get(row, u32(x), 2u);
+    avl_set(row, u32(x), 2u, i32(y));
+    avl_set(row, u32(y), 1u, i32(z));
+    avl_set(row, u32(y), 0u, avl_measured(row, i32(y)));
+    avl_set(row, u32(x), 0u, avl_measured(row, x));
+    return u32(x);
+}
+
+fn avl_rotate_left(row: u32, x: u32) -> u32 {
+    let y = avl_get(row, x, 2u);
+    if (y < 0) { return x; }
+    let z = avl_get(row, u32(y), 1u);
+    avl_set(row, u32(y), 1u, i32(x));
+    avl_set(row, u32(x), 2u, i32(z));
+    avl_set(row, u32(x), 0u, avl_measured(row, i32(x)));
+    avl_set(row, u32(y), 0u, avl_measured(row, y));
+    return u32(y);
+}
+
 fn rotate_left(x: u32, d: u32) -> u32 {
     return x << d | x >> (32 - d);
 }

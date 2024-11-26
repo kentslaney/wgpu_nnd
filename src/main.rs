@@ -57,7 +57,7 @@ async fn run() {
         mapped_at_creation: false,
     });
     debug_assert!(
-        size_of_val(buffers.scratch) as u32 / 4 == info.avl_info.offset +
+        size_of_val(buffers.scratch) as u32 / 4 ==
         info.scratch_info.row_strides * info.scratch_info.rows);
     let storage_buffer_scratch = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
