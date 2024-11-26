@@ -206,6 +206,7 @@ fn push(row: u32, candidate: i32) {
 const avl_height = 0u;
 const avl_left = 1u;
 const avl_right = 2u;
+const avl_up = 3u;
 
 const avl_root = 0u;
 const avl_link = 1u;
@@ -274,6 +275,9 @@ fn avl_rotate_right(row: u32, y: u32) -> u32 {
     avl_set(row, u32(y), avl_left,  i32(z));
     avl_set(row, u32(y), avl_height, avl_measured(row, i32(y)));
     avl_set(row, u32(x), avl_height, avl_measured(row, x));
+    avl_set(row, u32(x), avl_up, avl_get(row, u32(y), avl_up));
+    avl_set(row, u32(y), avl_up, x);
+    avl_set(row, u32(z), avl_up, i32(y));
     return u32(x);
 }
 
@@ -285,6 +289,9 @@ fn avl_rotate_left(row: u32, x: u32) -> u32 {
     avl_set(row, u32(x), avl_right, i32(z));
     avl_set(row, u32(x), avl_height, avl_measured(row, i32(x)));
     avl_set(row, u32(y), avl_height, avl_measured(row, y));
+    avl_set(row, u32(y), avl_up, avl_get(row, u32(x), avl_up));
+    avl_set(row, u32(x), avl_up, y);
+    avl_set(row, u32(z), avl_up, i32(x));
     return u32(y);
 }
 

@@ -87,7 +87,7 @@ pub fn cli() -> (WsglArgs, WsglBuffers) {
     let scratch_init = RawArray2::new(
         -Array2::<i32>::ones((data_info.rows as usize, candidates)));
     let avl_init = RawArray3::new(
-        -Array3::<i32>::ones((data_info.rows as usize, k, 3)));
+        -Array3::<i32>::ones((data_info.rows as usize, k, 4)));
     let meta_init = RawArray2::new(
         -Array2::<i32>::ones((data_info.rows as usize, 2)));
     let (knn_info, knn_input) = WsglArray2Info::new(knn_init);
