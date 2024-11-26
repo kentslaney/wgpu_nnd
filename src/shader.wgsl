@@ -315,6 +315,26 @@ fn avl_re_balance(row: u32, root: u32, balance: i32) -> u32 {
     }
 }
 
+fn avl_search(row: u32, primary: f32, secondary: i32) -> vec2i {
+    var dir = 0;
+    var i = u32(meta_get(row, avl_root));
+    while (i != -1) {
+        dir = avl_sign(row, primary, secondary, i)
+        if (dir == 0) {
+            break;
+        } else if (dir == 1) {
+            i = avl_get(row, i, avl_right)
+        } else {
+            i = avl_get(row, i, avl_left)
+        }
+    }
+    return vec2i(i, dir);
+}
+
+fn avl_path(row: u32, x: u32) -> vec2i {
+    return avl_search(row, distances_get(row, x), knn_get(row, x));
+}
+
 fn rotate_left(x: u32, d: u32) -> u32 {
     return x << d | x >> (32 - d);
 }
