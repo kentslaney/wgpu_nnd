@@ -6,8 +6,8 @@ async fn run() {
     let (info, mut buffers_input) = cli();
     let knn = buffers_input.knn.as_mut_slice();
     let data = buffers_input.data.as_mut_slice();
+    let distances = buffers_input.distances.as_mut_slice();
     let buffers = WsglSlices {
-        distances: buffers_input.distances.as_mut_slice(),
         scratch: buffers_input.scratch.as_mut_slice(),
         avl: buffers_input.avl.as_mut_slice(),
         meta: buffers_input.meta.as_mut_slice(),
@@ -42,7 +42,7 @@ async fn run() {
     let storage_buffer_distances = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&buffers.distances[..]),
+            contents: bytemuck::cast_slice(&distances[..]),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
     let storage_buffer_knn = device.create_buffer_init(
@@ -73,6 +73,13 @@ async fn run() {
                 &buffers.scratch[..], &buffers.avl, &buffers.meta].concat()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
+    #[cfg(debug_assertions)]
+    let debug_distances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: size_of_val(distances) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
     #[cfg(debug_assertions)]
     let scratch_size = size_of_val(buffers.scratch) + size_of_val(buffers.avl) +
         size_of_val(buffers.meta);
@@ -244,6 +251,19 @@ async fn run() {
     )
     .await;
     #[cfg(debug_assertions)]
+    let mut distances = unsafe {
+        Box::<[f32]>::new_uninit_slice(size_of_val(distances) / 4).assume_init()
+    };
+    #[cfg(debug_assertions)]
+    get_data(
+        &mut distances[..],
+        &storage_buffer_distances,
+        &debug_distances_buffer,
+        &device,
+        &queue,
+    )
+    .await;
+    #[cfg(debug_assertions)]
     let mut debug = unsafe {
         Box::<[i32]>::new_uninit_slice(scratch_size / 4).assume_init()
     };
@@ -258,6 +278,8 @@ async fn run() {
     .await;
 
     log::info!("Output: {:?}", knn);
+    #[cfg(debug_assertions)]
+    log::info!("Distances: {:?}", distances);
     #[cfg(debug_assertions)]
     log::info!("Scratch: {:?}", debug);
 }

@@ -63,7 +63,6 @@ pub struct WsglBuffers {
 }
 
 pub struct WsglSlices<'a> {
-    pub distances: &'a [f32],
     pub scratch: &'a [i32],
     pub avl: &'a [i32],
     pub meta: &'a [i32],

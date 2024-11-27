@@ -374,7 +374,7 @@ fn avl_insert(row: u32, x: u32) {
                 avl_pre_balance(row, u32(node), balance);
             }
             prev = i32(avl_re_balance(row, u32(node), balance));
-            node = avl_get(row, u32(node), avl_up);
+            node = avl_get(row, u32(prev), avl_up);
             if (node == -1) { break; }
             sign = avl_cmp(row, i32(x), node);
         }
