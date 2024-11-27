@@ -1,7 +1,7 @@
 .PHONY: debug
 
 debug: tmp.npy
-	cargo run tmp.npy 5 3
+	cargo run tmp.npy 5 1
 
 tmp.npy: .venv
 	.venv/bin/python -c "import numpy as np; np.random.seed(0); \

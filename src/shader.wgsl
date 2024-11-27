@@ -384,6 +384,7 @@ fn avl_insert(row: u32, x: u32) {
         }
     }
     meta_set(row, avl_root, prev);
+    meta_set(row, avl_link, avl_get(row, x, avl_up));
 }
 
 fn avl_remove(row: u32, x: u32) {
@@ -541,4 +542,7 @@ fn main(@builtin(workgroup_id) wid: vec3u) {
     for (var i = 0u; i < k; i++) {
         flag_reset(wid.x, i);
     }
+    storageBarrier();
+    scratch_set(wid.x, 0u, avl_get(6u, 4u, avl_up));
+    storageBarrier();
 }
