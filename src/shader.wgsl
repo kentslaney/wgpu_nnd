@@ -310,9 +310,9 @@ fn avl_re_balance(row: u32, root: u32, balance: i32) -> u32 {
     if (balance == 0) {
         return root;
     } else if (balance == 1) {
-        return avl_rotate_left(row, u32(avl_get(row, root, avl_left)));
+        return avl_rotate_right(row, root);
     } else {
-        return avl_rotate_right(row, u32(avl_get(row, root, avl_right)));
+        return avl_rotate_left(row, root);
     }
 }
 
@@ -355,6 +355,7 @@ fn avl_insert(row: u32, x: u32) {
     var sign = path.y;
     var side = 0;
     avl_set(row, x, avl_up, node);
+    avl_set(row, x, avl_height, 1);
     if (node != -1) {
         loop {
             if (sign == 1) {
@@ -367,9 +368,9 @@ fn avl_insert(row: u32, x: u32) {
             if (balance == 0) {
                 side = 1;
             } else if (balance == 1) {
-                side = avl_cmp(row, prev, avl_get(row, u32(node), avl_left));
+                side = avl_cmp(row, node, avl_get(row, u32(node), avl_left));
             } else {
-                side = avl_cmp(row, prev, avl_get(row, u32(node), avl_right));
+                side = avl_cmp(row, node, avl_get(row, u32(node), avl_right));
             }
             if (balance == side) {
                 avl_pre_balance(row, u32(node), balance);
@@ -462,7 +463,7 @@ fn big_mod(x: vec2u, span: u32) -> u32 {
 }
 
 fn randomize(rng: vec2u, row: u32) {
-    for (var i = 0u; meta_get(row, avl_max) > -4; i++) {
+    for (var i = 0u; meta_get(row, avl_max) < 0; i++) {
         let rand = i32(big_mod(threefry2x32(rng, vec2u(0u, i)), points));
         avl_push(row, rand);
     }
