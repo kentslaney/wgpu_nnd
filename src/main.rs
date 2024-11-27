@@ -1,4 +1,4 @@
-use wgpu_nnd::{ cli, WsglSlices };
+use wgpu_nnd::{ cli, WsglArgs, WsglSlices };
 use std::mem::size_of_val;
 use wgpu::util::DeviceExt;
 
@@ -174,9 +174,9 @@ async fn run() {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
-    let avl_offset = info.avl_info.offset + info.scratch_info.offset +
+    let avl_offset = info.scratch_info.offset +
         info.scratch_info.row_strides * info.scratch_info.rows;
-    let meta_offset = avl_offset +
+    let meta_offset = avl_offset + info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows;
     let pipeline_options = wgpu::PipelineCompilationOptions {
         constants: &[
@@ -205,12 +205,12 @@ async fn run() {
             ("scratch_col_strides".to_owned(),
                 info.scratch_info.col_strides.into()),
 
-            ("avl_offset".to_owned(), (avl_offset).into()),
+            ("avl_offset".to_owned(), avl_offset.into()),
             ("avl_row_strides".to_owned(), info.avl_info.row_strides.into()),
             ("avl_col_strides".to_owned(), info.avl_info.col_strides.into()),
             ("avl_vox_strides".to_owned(), info.avl_info.vox_strides.into()),
 
-            ("meta_offset".to_owned(), (meta_offset).into()),
+            ("meta_offset".to_owned(), meta_offset.into()),
             ("meta_row_strides".to_owned(), info.meta_info.row_strides.into()),
             ("meta_col_strides".to_owned(), info.meta_info.col_strides.into()),
         ].into(), ..Default::default()};
@@ -279,9 +279,7 @@ async fn run() {
 
     log::info!("Output: {:?}", knn);
     #[cfg(debug_assertions)]
-    log::info!("Distances: {:?}", distances);
-    #[cfg(debug_assertions)]
-    log::info!("Scratch: {:?}", debug);
+    visualize(&info, &knn, &distances, &debug);
 }
 
 async fn get_data<T: bytemuck::Pod>(
@@ -305,6 +303,72 @@ async fn get_data<T: bytemuck::Pod>(
     output.copy_from_slice(
         bytemuck::cast_slice(&buffer_slice.get_mapped_range()[..]));
     staging_buffer.unmap();
+}
+
+fn visualize(info: &WsglArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
+    log::info!("Distances: {:?}", distances);
+    let avl_offset = (info.scratch_info.offset +
+        info.scratch_info.row_strides * info.scratch_info.rows) as usize;
+    let meta_offset = (avl_offset as u32 + info.avl_info.offset +
+        info.avl_info.row_strides * info.avl_info.rows) as usize;
+    let _candidates = &debug[info.scratch_info.offset as usize..avl_offset];
+    let avl = &debug[avl_offset + (info.avl_info.offset as usize)..meta_offset];
+    let meta = &debug[meta_offset + (info.meta_info.offset as usize)..];
+    for i in 0..info.knn_info.rows {
+        let tree = walk(
+            &knn[
+                (i * info.knn_info.row_strides) as usize..
+                (i * info.knn_info.row_strides +
+                    info.distances_info.col_strides *
+                    info.knn_info.cols) as usize
+            ],
+            &distances[
+                (i * info.distances_info.row_strides) as usize..
+                (i * info.distances_info.row_strides +
+                    info.distances_info.col_strides *
+                    info.distances_info.cols) as usize
+            ],
+            &avl[
+                (i * info.avl_info.row_strides) as usize..
+                (i * info.avl_info.row_strides +
+                    info.avl_info.col_strides *
+                    info.avl_info.cols) as usize
+            ],
+            info.avl_info.col_strides as usize,
+            meta[(info.meta_info.row_strides * i) as usize],
+            String::from(""),
+            String::from("")
+        );
+        println!("{}", &tree[0..std::cmp::max(tree.len(), 1) - 1]);
+    }
+}
+
+fn walk(
+    row: &[i32],
+    distances: &[f32],
+    avl: &[i32],
+    strides: usize,
+    node: i32,
+    prefix: String,
+    postfix: String
+) -> String {
+    if node == -1 { return "".to_owned(); }
+    let mut line = format!(
+        "{}{}", &prefix[0..std::cmp::max(prefix.len(), 4) - 4], postfix);
+    let l = avl[node as usize * strides + 1];
+    let r = avl[node as usize * strides + 2];
+    if l == -1 && r == -1 {
+        line.push_str(&format!(
+            "\u{2500}{} {}\n", row[node as usize], distances[node as usize]));
+    } else {
+        line.push_str(&format!(
+            "\u{252C}{} {}\n", row[node as usize], distances[node as usize]));
+        line.push_str(&walk(row, distances, avl, strides, l, format!(
+            "{}\u{2502}", prefix), "\u{251C}".to_owned()));
+        line.push_str(&walk(row, distances, avl, strides, r, format!(
+            "{}\u{2502}", prefix), "\u{2514}".to_owned()));
+    }
+    line
 }
 
 pub fn main() {
