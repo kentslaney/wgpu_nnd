@@ -384,6 +384,10 @@ fn avl_insert(row: u32, x: u32) {
     meta_set(row, avl_root, prev);
 }
 
+fn avl_remove(row: u32, x: u32) {
+    // TODO
+}
+
 fn avl_set_max(row: u32) {
     var node = meta_get(row, avl_root);
     var prev = node;
@@ -394,11 +398,16 @@ fn avl_set_max(row: u32) {
     meta_set(row, avl_max, prev);
 }
 
+fn avl_check(row: u32, primary: f32, secondary: i32) -> bool {
+    let res = avl_search(row, primary, secondary);
+    return res.x != -1 && res.y == 0;
+}
+
 fn avl_push(row: u32, candidate: i32) {
     if (row == u32(candidate)) { return; }
     let dist = distance(row, u32(candidate));
     let idx = meta_get(row, avl_max);
-    if (check(row, candidate)) { return; }
+    if (avl_check(row, dist, candidate)) { return; }
     if (idx < 0) {
         distances_set(row, u32(~idx), dist);
         knn_flag_set(row, u32(~idx), candidate, true);
@@ -409,6 +418,7 @@ fn avl_push(row: u32, candidate: i32) {
         }
     } else {
         if (distances_get(row, u32(idx)) <= dist) { return; }
+        avl_remove(row, u32(idx));
         distances_set(row, u32(idx), dist);
         knn_flag_set(row, u32(idx), candidate, true);
         avl_insert(row, u32(idx));
