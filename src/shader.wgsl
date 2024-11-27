@@ -209,7 +209,8 @@ const avl_right = 2u;
 const avl_up = 3u;
 
 const avl_root = 0u;
-const avl_link = 1u;
+const avl_max = 1u;
+const avl_link = 2u;
 
 fn avl_depth(row: u32, col: i32) -> i32 {
     if (col < 0) { return 0; }
@@ -381,6 +382,28 @@ fn avl_insert(row: u32, x: u32) {
     meta_set(row, avl_root, prev);
 }
 
+fn avl_push(row: u32, candidate: i32) {
+    if (row == u32(candidate)) { return; }
+    let dist = distance(row, u32(candidate));
+    let idx = meta_get(row, avl_max);
+    if (check(row, candidate)) { return; }
+    if (idx < 0) {
+        distances_set(row, u32(~idx), dist);
+        knn_flag_set(row, u32(~idx), candidate, true);
+        avl_insert(row, u32(~idx));
+        if (-idx < i32(k)) {
+            meta_set(row, avl_max, idx - 1);
+            return;
+        }
+    } else {
+        if (distances_get(row, u32(idx)) <= dist) { return; }
+        distances_set(row, u32(idx), dist);
+        knn_flag_set(row, u32(idx), candidate, true);
+        avl_insert(row, u32(idx));
+    }
+    meta_set(row, avl_max, 0); // TODO
+}
+
 fn rotate_left(x: u32, d: u32) -> u32 {
     return x << d | x >> (32 - d);
 }
@@ -429,7 +452,8 @@ fn big_mod(x: vec2u, span: u32) -> u32 {
 
 fn randomize(rng: vec2u, row: u32) {
     for (var i = 0u; knn_get(row, 0u) == -1; i++) {
-        push(row, i32(big_mod(threefry2x32(rng, vec2u(0u, i)), points)));
+        let rand = i32(big_mod(threefry2x32(rng, vec2u(0u, i)), points));
+        avl_push(row, rand);
     }
 }
 
