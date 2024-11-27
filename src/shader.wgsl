@@ -354,6 +354,7 @@ fn avl_insert(row: u32, x: u32) {
     var prev = i32(x);
     var sign = path.y;
     var side = 0;
+    avl_set(row, x, avl_up, node);
     if (node != -1) {
         loop {
             if (sign == 1) {
@@ -461,7 +462,7 @@ fn big_mod(x: vec2u, span: u32) -> u32 {
 }
 
 fn randomize(rng: vec2u, row: u32) {
-    for (var i = 0u; meta_get(row, avl_max) < 0; i++) {
+    for (var i = 0u; meta_get(row, avl_max) > -4; i++) {
         let rand = i32(big_mod(threefry2x32(rng, vec2u(0u, i)), points));
         avl_push(row, rand);
     }

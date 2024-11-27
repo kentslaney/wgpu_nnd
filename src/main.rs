@@ -311,9 +311,12 @@ fn visualize(info: &WsglArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
         info.scratch_info.row_strides * info.scratch_info.rows) as usize;
     let meta_offset = (avl_offset as u32 + info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows) as usize;
-    let _candidates = &debug[info.scratch_info.offset as usize..avl_offset];
+    let candidates = &debug[info.scratch_info.offset as usize..avl_offset];
     let avl = &debug[avl_offset + (info.avl_info.offset as usize)..meta_offset];
     let meta = &debug[meta_offset + (info.meta_info.offset as usize)..];
+    log::info!("Candidates: {:?}", candidates);
+    log::info!("AVL: {:?}", avl);
+    log::info!("Meta: {:?}", meta);
     for i in 0..info.knn_info.rows {
         let tree = walk(
             &knn[
@@ -354,7 +357,7 @@ fn walk(
 ) -> String {
     if node == -1 { return "".to_owned(); }
     let mut line = format!(
-        "{}{}", &prefix[0..std::cmp::max(prefix.len(), 4) - 4], postfix);
+        "{}{}", &prefix[0..std::cmp::max(prefix.len(), 3) - 3], postfix);
     let l = avl[node as usize * strides + 1];
     let r = avl[node as usize * strides + 2];
     if l == -1 && r == -1 {
@@ -366,7 +369,7 @@ fn walk(
         line.push_str(&walk(row, distances, avl, strides, l, format!(
             "{}\u{2502}", prefix), "\u{251C}".to_owned()));
         line.push_str(&walk(row, distances, avl, strides, r, format!(
-            "{}\u{2502}", prefix), "\u{2514}".to_owned()));
+            "{}\u{2007}", prefix), "\u{2514}".to_owned()));
     }
     line
 }
