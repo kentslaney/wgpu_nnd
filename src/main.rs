@@ -315,39 +315,40 @@ fn visualize(info: &WsglArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
     let avl = &debug[avl_offset + (info.avl_info.offset as usize)..meta_offset];
     let meta = &debug[meta_offset + (info.meta_info.offset as usize)..];
     log::info!("Candidates: {:?}", candidates);
-    log::info!("AVL: {:?}", avl);
     log::info!("Meta: {:?}", meta);
     for i in 0..info.knn_info.rows {
-        let tree = walk(
-            &knn[
+        let row_knn = &knn[
                 (i * info.knn_info.row_strides) as usize..
                 (i * info.knn_info.row_strides +
                     info.distances_info.col_strides *
                     info.knn_info.cols) as usize
-            ],
-            &distances[
+            ];
+        let row_distances = &distances[
                 (i * info.distances_info.row_strides) as usize..
                 (i * info.distances_info.row_strides +
                     info.distances_info.col_strides *
                     info.distances_info.cols) as usize
-            ],
-            &avl[
+            ];
+        let row_avl = &avl[
                 (i * info.avl_info.row_strides) as usize..
                 (i * info.avl_info.row_strides +
                     info.avl_info.col_strides *
                     info.avl_info.cols) as usize
-            ],
+            ];
+        let tree = walk(
+            row_knn, row_distances, row_avl,
             info.avl_info.col_strides as usize,
             meta[(info.meta_info.row_strides * i) as usize],
             String::from(""),
             String::from("")
         );
+        log::info!("AVL: {:?}", row_avl);
         println!("{}", &tree[0..std::cmp::max(tree.len(), 1) - 1]);
     }
 }
 
 fn walk(
-    row: &[i32],
+    knn: &[i32],
     distances: &[f32],
     avl: &[i32],
     strides: usize,
@@ -360,15 +361,18 @@ fn walk(
         "{}{}", &prefix[0..std::cmp::max(prefix.len(), 3) - 3], postfix);
     let l = avl[node as usize * strides + 1];
     let r = avl[node as usize * strides + 2];
+    let u = avl[node as usize * strides + 3];
     if l == -1 && r == -1 {
         line.push_str(&format!(
-            "\u{2500}{} {}\n", row[node as usize], distances[node as usize]));
+            "\u{2500}({}^{}) {} {}\n",
+            node, u, knn[node as usize], distances[node as usize]));
     } else {
         line.push_str(&format!(
-            "\u{252C}{} {}\n", row[node as usize], distances[node as usize]));
-        line.push_str(&walk(row, distances, avl, strides, l, format!(
+            "\u{252C}({}^{}) {} {}\n",
+            node, u, knn[node as usize], distances[node as usize]));
+        line.push_str(&walk(knn, distances, avl, strides, l, format!(
             "{}\u{2502}", prefix), "\u{251C}".to_owned()));
-        line.push_str(&walk(row, distances, avl, strides, r, format!(
+        line.push_str(&walk(knn, distances, avl, strides, r, format!(
             "{}\u{2007}", prefix), "\u{2514}".to_owned()));
     }
     line

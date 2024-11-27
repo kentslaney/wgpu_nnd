@@ -297,13 +297,15 @@ fn avl_rotate_left(row: u32, x: u32) -> u32 {
 }
 
 fn avl_pre_balance(row: u32, root: u32, balance: i32) {
+    var node = 0u;
     if (balance == 1) {
-        avl_set(row, root, avl_left, i32(avl_rotate_left(row, u32(avl_get(
-            row, root, avl_left)))));
+        node = avl_rotate_left(row, u32(avl_get(row, root, avl_left)));
+        avl_set(row, root, avl_left, i32(node));
     } else {
-        avl_set(row, root, avl_right, i32(avl_rotate_right(row, u32(avl_get(
-            row, root, avl_right)))));
+        node = avl_rotate_right(row, u32(avl_get(row, root, avl_right)));
+        avl_set(row, root, avl_right, i32(node));
     }
+    avl_set(row, node, avl_up, i32(root));
 }
 
 fn avl_re_balance(row: u32, root: u32, balance: i32) -> u32 {
@@ -385,7 +387,58 @@ fn avl_insert(row: u32, x: u32) {
 }
 
 fn avl_remove(row: u32, x: u32) {
-    // TODO
+    let parent = avl_get(row, x, avl_up);
+    let l = avl_get(row, x, avl_left);
+    let r = avl_get(row, x, avl_right);
+    var child = -1;
+    var node = -1;
+    if (l == -1 || r == -1) {
+        node = parent;
+        if (l == -1) {
+            child = r;
+            if (r != -1) {
+                avl_set(row, u32(child), avl_up, parent);
+            }
+        } else {
+            child = l;
+            avl_set(row, u32(child), avl_up, parent);
+        }
+    } else {
+        for (var i = r; i != -1; i = avl_get(row, u32(i), avl_left)) {
+            child = i;
+        }
+        let grandchild = avl_get(row, u32(child), avl_right);
+        node = avl_get(row, u32(child), avl_up);
+        avl_set(row, u32(node), avl_left, grandchild);
+        avl_set(row, u32(grandchild), avl_up, node);
+        if (r == child) {
+            avl_set(row, u32(child), avl_right, -1);
+        } else {
+            avl_set(row, u32(child), avl_right, r);
+            avl_set(row, u32(r), avl_up, child);
+        }
+        avl_set(row, u32(child), avl_left, l);
+        avl_set(row, u32(l), avl_up, child);
+        avl_set(row, u32(child), avl_up, parent);
+    }
+    var sign = 0;
+    if (parent == -1) {
+        meta_set(row, avl_root, child);
+    } else if (avl_get(row, u32(parent), avl_left) == i32(x)) {
+        avl_set(row, u32(parent), avl_left, child);
+        sign = -1;
+    } else {
+        avl_set(row, u32(parent), avl_right, child);
+        sign = 1;
+    }
+    if (child != -1) {
+        avl_set(row, u32(child), avl_up, parent);
+    }
+    avl_set(row, x, avl_left, -1);
+    avl_set(row, x, avl_right, -1);
+    avl_set(row, x, avl_up, -1);
+    avl_set(row, x, avl_height, -1);
+    // TODO: (p)re-balance with node
 }
 
 fn avl_set_max(row: u32) {
@@ -484,6 +537,7 @@ fn randomize(rng: vec2u, row: u32) {
 fn main(@builtin(workgroup_id) wid: vec3u) {
     let rng = threefry2x32(vec2u(0, seed), vec2u(0, wid.x));
     randomize(rng, wid.x);
+    //avl_remove(wid.x, 0u);
     for (var i = 0u; i < k; i++) {
         flag_reset(wid.x, i);
     }
