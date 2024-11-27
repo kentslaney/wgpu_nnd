@@ -2,7 +2,7 @@
 @group(0) @binding(0) var<storage, read>       data:      array<f32>;
 @group(0) @binding(1) var<storage, read_write> distances: array<f32>;
 @group(0) @binding(2) var<storage, read_write> knn:       array<i32>;
-@group(0) @binding(2) var<storage, read_write> scratch:   array<i32>;
+@group(0) @binding(3) var<storage, read_write> scratch:   array<i32>;
 
 override k: u32 = 15u;
 override candidates: u32 = 15u;
@@ -382,6 +382,16 @@ fn avl_insert(row: u32, x: u32) {
     meta_set(row, avl_root, prev);
 }
 
+fn avl_set_max(row: u32) {
+    var node = meta_get(row, avl_root);
+    var prev = node;
+    while (node != -1) {
+        prev = node;
+        node = avl_get(row, u32(node), avl_right);
+    }
+    meta_set(row, avl_max, prev);
+}
+
 fn avl_push(row: u32, candidate: i32) {
     if (row == u32(candidate)) { return; }
     let dist = distance(row, u32(candidate));
@@ -401,7 +411,7 @@ fn avl_push(row: u32, candidate: i32) {
         knn_flag_set(row, u32(idx), candidate, true);
         avl_insert(row, u32(idx));
     }
-    meta_set(row, avl_max, 0); // TODO
+    avl_set_max(row);
 }
 
 fn rotate_left(x: u32, d: u32) -> u32 {
@@ -451,7 +461,7 @@ fn big_mod(x: vec2u, span: u32) -> u32 {
 }
 
 fn randomize(rng: vec2u, row: u32) {
-    for (var i = 0u; knn_get(row, 0u) == -1; i++) {
+    for (var i = 0u; meta_get(row, avl_max) < 0; i++) {
         let rand = i32(big_mod(threefry2x32(rng, vec2u(0u, i)), points));
         avl_push(row, rand);
     }
