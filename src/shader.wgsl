@@ -317,15 +317,17 @@ fn avl_re_balance(row: u32, root: u32, balance: i32) -> u32 {
 
 fn avl_search(row: u32, primary: f32, secondary: i32) -> vec2i {
     var dir = 0;
-    var i = u32(meta_get(row, avl_root));
-    while (i != -1) {
-        dir = avl_sign(row, primary, secondary, i)
+    var i = meta_get(row, avl_root);
+    var j = i;
+    while (j != -1) {
+        i = j;
+        dir = avl_sign(row, primary, secondary, i);
         if (dir == 0) {
             break;
         } else if (dir == 1) {
-            i = avl_get(row, i, avl_right)
-        } else {
-            i = avl_get(row, i, avl_left)
+            j = avl_get(row, u32(i), avl_right);
+        } else {;
+            j = avl_get(row, u32(i), avl_left);
         }
     }
     return vec2i(i, dir);
@@ -333,6 +335,50 @@ fn avl_search(row: u32, primary: f32, secondary: i32) -> vec2i {
 
 fn avl_path(row: u32, x: u32) -> vec2i {
     return avl_search(row, distances_get(row, x), knn_get(row, x));
+}
+
+fn l1ge2(x: i32) -> i32 {
+    if (x >= 2) {
+        return 1;
+    } else if (x <= -2) {
+        return -1;
+    }
+    return 0;
+}
+
+fn avl_insert(row: u32, x: u32) {
+    let path = avl_path(row, x);
+    if (path.y == 0 && path.x != -1) { return; }
+    var node = path.x;
+    var prev = i32(x);
+    var sign = path.y;
+    var side = 0;
+    if (node != -1) {
+        loop {
+            if (sign == 1) {
+                avl_set(row, u32(node), avl_right, prev);
+            } else {
+                avl_set(row, u32(node), avl_left, prev);
+            }
+            avl_set(row, u32(node), avl_height, avl_measured(row, node));
+            let balance = l1ge2(avl_balance(row, node));
+            if (balance == 0) {
+                side = 1;
+            } else if (balance == 1) {
+                side = avl_cmp(row, prev, avl_get(row, u32(node), avl_left));
+            } else {
+                side = avl_cmp(row, prev, avl_get(row, u32(node), avl_right));
+            }
+            if (balance == side) {
+                avl_pre_balance(row, u32(node), balance);
+            }
+            prev = i32(avl_re_balance(row, u32(node), balance));
+            node = avl_get(row, u32(node), avl_up);
+            if (node == -1) { break; }
+            sign = avl_cmp(row, i32(x), node);
+        }
+    }
+    meta_set(row, avl_root, prev);
 }
 
 fn rotate_left(x: u32, d: u32) -> u32 {
