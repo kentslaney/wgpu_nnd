@@ -413,6 +413,7 @@ fn avl_remove(row: u32, x: u32) {
         if (grandchild != -1) { avl_set(row, u32(grandchild), avl_up, node); }
         if (r == child) {
             avl_set(row, u32(child), avl_right, -1);
+            node = child;
         } else {
             avl_set(row, u32(child), avl_right, r);
             avl_set(row, u32(r), avl_up, child);
@@ -438,7 +439,36 @@ fn avl_remove(row: u32, x: u32) {
     avl_set(row, x, avl_right, -1);
     avl_set(row, x, avl_up, -1);
     avl_set(row, x, avl_height, -1);
-    // TODO: (p)re-balance with node
+    if (node != -1) {
+        var prev = -1;
+        var side = 0;
+        loop {
+            if (prev != -1) {
+                if (sign == 1) {
+                    avl_set(row, u32(node), avl_right, prev);
+                } else {
+                    avl_set(row, u32(node), avl_left, prev);
+                }
+            }
+            avl_set(row, u32(node), avl_height, avl_measured(row, node));
+            let balance = l1ge2(avl_balance(row, node));
+            if (balance == 0) {
+                side = 0;
+            } else if (balance == 1) {
+                side = avl_balance(row, avl_get(row, u32(node), avl_left));
+            } else {
+                side = avl_balance(row, avl_get(row, u32(node), avl_right));
+            }
+            if (l1ge2(balance - side) != 0) {
+                avl_pre_balance(row, u32(node), balance);
+            }
+            prev = i32(avl_re_balance(row, u32(node), balance));
+            node = avl_get(row, u32(prev), avl_up);
+            if (node == -1) { break; }
+            sign = avl_cmp(row, prev, node);
+        }
+        meta_set(row, avl_root, prev);
+    }
 }
 
 fn avl_set_max(row: u32) {
@@ -537,7 +567,7 @@ fn randomize(rng: vec2u, row: u32) {
 fn main(@builtin(workgroup_id) wid: vec3u) {
     let rng = threefry2x32(vec2u(0, seed), vec2u(0, wid.x));
     randomize(rng, wid.x);
-    avl_remove(wid.x, 0u);
+    //avl_remove(wid.x, 0u);
     for (var i = 0u; i < k; i++) {
         flag_reset(wid.x, i);
     }
