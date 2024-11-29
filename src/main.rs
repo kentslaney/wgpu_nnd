@@ -359,17 +359,18 @@ fn walk(
     if node == -1 { return "".to_owned(); }
     let mut line = format!(
         "{}{}", &prefix[0..std::cmp::max(prefix.len(), 3) - 3], postfix);
+    let h = avl[node as usize * strides + 0];
     let l = avl[node as usize * strides + 1];
     let r = avl[node as usize * strides + 2];
     let u = avl[node as usize * strides + 3];
     if l == -1 && r == -1 {
         line.push_str(&format!(
-            "\u{2500}({}^{}) {} {}\n",
-            node, u, knn[node as usize], distances[node as usize]));
+            "\u{2500}({}^{}h{}) {} {}\n",
+            node, u, h, knn[node as usize], distances[node as usize]));
     } else {
         line.push_str(&format!(
-            "\u{252C}({}^{}) {} {}\n",
-            node, u, knn[node as usize], distances[node as usize]));
+            "\u{252C}({}^{}h{}) {} {}\n",
+            node, u, h, knn[node as usize], distances[node as usize]));
         line.push_str(&walk(knn, distances, avl, strides, l, format!(
             "{}\u{2502}", prefix), "\u{251C}".to_owned()));
         line.push_str(&walk(knn, distances, avl, strides, r, format!(

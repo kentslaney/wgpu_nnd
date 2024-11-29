@@ -352,38 +352,40 @@ fn l1ge2(x: i32) -> i32 {
 fn avl_insert(row: u32, x: u32) {
     let path = avl_path(row, x);
     if (path.y == 0 && path.x != -1) { return; }
-    var node = path.x;
+    var root = path.x;
+    var node = i32(x);
     var prev = i32(x);
     var sign = path.y;
     var side = 0;
-    avl_set(row, x, avl_up, node);
+    avl_set(row, x, avl_up, root);
     avl_set(row, x, avl_height, 1);
-    if (node != -1) {
+    if (root != -1) {
         loop {
             if (sign == 1) {
-                avl_set(row, u32(node), avl_right, prev);
+                avl_set(row, u32(root), avl_right, node);
             } else {
-                avl_set(row, u32(node), avl_left, prev);
+                avl_set(row, u32(root), avl_left, node);
             }
-            avl_set(row, u32(node), avl_height, avl_measured(row, node));
-            let balance = l1ge2(avl_balance(row, node));
+            avl_set(row, u32(root), avl_height, avl_measured(row, root));
+            let balance = l1ge2(avl_balance(row, root));
             if (balance == 0) {
                 side = 1;
             } else if (balance == 1) {
-                side = avl_cmp(row, node, avl_get(row, u32(node), avl_left));
+                side = avl_cmp(row, prev, avl_get(row, u32(root), avl_left));
             } else {
-                side = avl_cmp(row, node, avl_get(row, u32(node), avl_right));
+                side = avl_cmp(row, prev, avl_get(row, u32(root), avl_right));
             }
             if (balance == side) {
-                avl_pre_balance(row, u32(node), balance);
+                avl_pre_balance(row, u32(root), balance);
             }
-            prev = i32(avl_re_balance(row, u32(node), balance));
-            node = avl_get(row, u32(prev), avl_up);
-            if (node == -1) { break; }
-            sign = avl_cmp(row, i32(x), node);
+            prev = node;
+            node = i32(avl_re_balance(row, u32(root), balance));
+            root = avl_get(row, u32(node), avl_up);
+            if (root == -1) { break; }
+            sign = avl_cmp(row, i32(node), root);
         }
     }
-    meta_set(row, avl_root, prev);
+    meta_set(row, avl_root, node);
 }
 
 fn avl_remove(row: u32, x: u32) {
@@ -567,7 +569,7 @@ fn randomize(rng: vec2u, row: u32) {
 fn main(@builtin(workgroup_id) wid: vec3u) {
     let rng = threefry2x32(vec2u(0, seed), vec2u(0, wid.x));
     randomize(rng, wid.x);
-    //avl_remove(wid.x, 0u);
+    avl_remove(wid.x, 0u);
     for (var i = 0u; i < k; i++) {
         flag_reset(wid.x, i);
     }
