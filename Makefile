@@ -1,7 +1,7 @@
 .PHONY: test, debug
 
 test:
-	rm tmp.npy
+	rm -f tmp.npy
 	make debug
 
 debug: tmp.npy

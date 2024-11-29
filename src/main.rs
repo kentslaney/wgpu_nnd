@@ -1,4 +1,4 @@
-use wgpu_nnd::{ cli, WsglArgs, WsglSlices };
+use wgpu_nnd::{ cli, WgslArgs, WgslSlices };
 use std::mem::size_of_val;
 use wgpu::util::DeviceExt;
 
@@ -7,7 +7,7 @@ async fn run() {
     let knn = buffers_input.knn.as_mut_slice();
     let data = buffers_input.data.as_mut_slice();
     let distances = buffers_input.distances.as_mut_slice();
-    let buffers = WsglSlices {
+    let buffers = WgslSlices {
         scratch: buffers_input.scratch.as_mut_slice(),
         avl: buffers_input.avl.as_mut_slice(),
         meta: buffers_input.meta.as_mut_slice(),
@@ -305,7 +305,7 @@ async fn get_data<T: bytemuck::Pod>(
     staging_buffer.unmap();
 }
 
-fn visualize(info: &WsglArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
+fn visualize(info: &WgslArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
     log::info!("Distances: {:?}", distances);
     let avl_offset = (info.scratch_info.offset +
         info.scratch_info.row_strides * info.scratch_info.rows) as usize;
