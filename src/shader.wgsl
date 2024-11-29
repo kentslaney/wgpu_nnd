@@ -278,7 +278,7 @@ fn avl_rotate_right(row: u32, y: u32) -> u32 {
     avl_set(row, u32(x), avl_height, avl_measured(row, x));
     avl_set(row, u32(x), avl_up, avl_get(row, u32(y), avl_up));
     avl_set(row, u32(y), avl_up, x);
-    avl_set(row, u32(z), avl_up, i32(y));
+    if (z >= 0) { avl_set(row, u32(z), avl_up, i32(y)); }
     return u32(x);
 }
 
@@ -292,7 +292,7 @@ fn avl_rotate_left(row: u32, x: u32) -> u32 {
     avl_set(row, u32(y), avl_height, avl_measured(row, y));
     avl_set(row, u32(y), avl_up, avl_get(row, u32(x), avl_up));
     avl_set(row, u32(x), avl_up, y);
-    avl_set(row, u32(z), avl_up, i32(x));
+    if (z >= 0) { avl_set(row, u32(z), avl_up, i32(x)); }
     return u32(y);
 }
 
