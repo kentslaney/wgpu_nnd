@@ -410,7 +410,7 @@ fn avl_remove(row: u32, x: u32) {
         let grandchild = avl_get(row, u32(child), avl_right);
         node = avl_get(row, u32(child), avl_up);
         avl_set(row, u32(node), avl_left, grandchild);
-        avl_set(row, u32(grandchild), avl_up, node);
+        if (grandchild != -1) { avl_set(row, u32(grandchild), avl_up, node); }
         if (r == child) {
             avl_set(row, u32(child), avl_right, -1);
         } else {
@@ -537,7 +537,7 @@ fn randomize(rng: vec2u, row: u32) {
 fn main(@builtin(workgroup_id) wid: vec3u) {
     let rng = threefry2x32(vec2u(0, seed), vec2u(0, wid.x));
     randomize(rng, wid.x);
-    //avl_remove(wid.x, 0u);
+    avl_remove(wid.x, 0u);
     for (var i = 0u; i < k; i++) {
         flag_reset(wid.x, i);
     }
