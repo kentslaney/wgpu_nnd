@@ -8,33 +8,33 @@ override k: u32 = 15u;
 override candidates: u32 = 15u;
 override seed: u32 = 0u;
 
-override ndim: u32 = 0u;
-override points: u32 = 0u;
+override ndim: u32;
+override points: u32;
 
-override data_offset = 0u;
-override data_row_strides = 0u;
-override data_col_strides = 0u;
+override data_offset: u32;
+override data_row_strides: u32;
+override data_col_strides: u32;
 
-override distances_offset = 0u;
-override distances_row_strides = 0u;
-override distances_col_strides = 0u;
+override distances_offset: u32;
+override distances_row_strides: u32;
+override distances_col_strides: u32;
 
-override knn_offset = 0u;
-override knn_row_strides = 0u;
-override knn_col_strides = 0u;
+override knn_offset: u32;
+override knn_row_strides: u32;
+override knn_col_strides: u32;
 
-override scratch_offset = 0u;
-override scratch_row_strides = 0u;
-override scratch_col_strides = 0u;
+override scratch_offset: u32;
+override scratch_row_strides: u32;
+override scratch_col_strides: u32;
 
-override avl_offset = 0u;
-override avl_row_strides = 0u;
-override avl_col_strides = 0u;
-override avl_vox_strides = 0u;
+override avl_offset: u32;
+override avl_row_strides: u32;
+override avl_col_strides: u32;
+override avl_vox_strides: u32;
 
-override meta_offset = 0u;
-override meta_row_strides = 0u;
-override meta_col_strides = 0u;
+override meta_offset: u32;
+override meta_row_strides: u32;
+override meta_col_strides: u32;
 
 fn data_get(row: u32, col: u32) -> f32 {
     return data[data_offset + row * data_row_strides + col * data_col_strides];
