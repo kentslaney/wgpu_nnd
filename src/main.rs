@@ -204,6 +204,8 @@ async fn run() {
                 info.scratch_info.row_strides.into()),
             ("scratch_col_strides".to_owned(),
                 info.scratch_info.col_strides.into()),
+            ("scratch_vox_strides".to_owned(),
+                info.scratch_info.vox_strides.into()),
 
             ("avl_offset".to_owned(), avl_offset.into()),
             ("avl_row_strides".to_owned(), info.avl_info.row_strides.into()),

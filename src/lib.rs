@@ -47,7 +47,7 @@ pub struct WgslArgs {
     pub data_info: WgslArray2Info,
     pub knn_info: WgslArray2Info,
     pub distances_info: WgslArray2Info,
-    pub scratch_info: WgslArray2Info,
+    pub scratch_info: WgslArray3Info,
     pub avl_info: WgslArray3Info,
     pub meta_info: WgslArray2Info,
     pub candidates: u32,
@@ -83,15 +83,15 @@ pub fn cli() -> (WgslArgs, WgslBuffers) {
         -Array2::<i32>::ones((data_info.rows as usize, k)));
     let distances_init = RawArray2::new(
         Array2::<f32>::from_elem((data_info.rows as usize, k), f32::INFINITY));
-    let scratch_init = RawArray2::new(
-        -Array2::<i32>::ones((data_info.rows as usize, candidates)));
+    let scratch_init = RawArray3::new(
+        -Array3::<i32>::ones((data_info.rows as usize, candidates, 2)));
     let avl_init = RawArray3::new(
         -Array3::<i32>::ones((data_info.rows as usize, k, 4)));
     let meta_init = RawArray2::new(
         -Array2::<i32>::ones((data_info.rows as usize, 3)));
     let (knn_info, knn_input) = WgslArray2Info::new(knn_init);
     let (distances_info, distances_input) = WgslArray2Info::new(distances_init);
-    let (scratch_info, scratch_input) = WgslArray2Info::new(scratch_init);
+    let (scratch_info, scratch_input) = WgslArray3Info::new(scratch_init);
     let (avl_info, avl_input) = WgslArray3Info::new(avl_init);
     let (meta_info, meta_input) = WgslArray2Info::new(meta_init);
     (WgslArgs {
