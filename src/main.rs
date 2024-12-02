@@ -236,7 +236,7 @@ async fn run() {
             });
         compute_pass.set_pipeline(&pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
-        compute_pass.dispatch_workgroups(info.data_info.rows, 1, 1);
+        compute_pass.dispatch_workgroups(1, 1, 1);
     }
     queue.submit(Some(command_encoder.finish()));
 
@@ -337,6 +337,7 @@ fn visualize(info: &WgslArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
             ];
         let tree = walk(
             row_knn, row_distances, row_avl,
+            info.data_info.rows as i32,
             info.avl_info.col_strides as usize,
             meta[(info.meta_info.row_strides * i) as usize],
             String::from(""),
@@ -351,6 +352,7 @@ fn walk(
     knn: &[i32],
     distances: &[f32],
     avl: &[i32],
+    points: i32,
     strides: usize,
     node: i32,
     prefix: String,
@@ -366,14 +368,14 @@ fn walk(
     if l == -1 && r == -1 {
         line.push_str(&format!(
             "\u{2500}({}^{}h{}) {} {}\n",
-            node, u, h, knn[node as usize], distances[node as usize]));
+            node, u, h, knn[node as usize] % points, distances[node as usize]));
     } else {
         line.push_str(&format!(
             "\u{252C}({}^{}h{}) {} {}\n",
-            node, u, h, knn[node as usize], distances[node as usize]));
-        line.push_str(&walk(knn, distances, avl, strides, l, format!(
+            node, u, h, knn[node as usize] % points, distances[node as usize]));
+        line.push_str(&walk(knn, distances, avl, points, strides, l, format!(
             "{}\u{2502}", prefix), "\u{251C}".to_owned()));
-        line.push_str(&walk(knn, distances, avl, strides, r, format!(
+        line.push_str(&walk(knn, distances, avl, points, strides, r, format!(
             "{}\u{2007}", prefix), "\u{2514}".to_owned()));
     }
     line

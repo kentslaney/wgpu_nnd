@@ -565,12 +565,9 @@ fn randomize(rng: vec2u, row: u32) {
 }
 
 @compute
-@workgroup_size(1)
-fn main(@builtin(workgroup_id) wid: vec3u) {
-    let rng = threefry2x32(vec2u(0, seed), vec2u(0, wid.x));
-    randomize(rng, wid.x);
-    avl_remove(wid.x, 0u);
-    for (var i = 0u; i < k; i++) {
-        flag_reset(wid.x, i);
-    }
+@workgroup_size(points)
+fn main(@builtin(local_invocation_index) lid: u32) {
+    let rng = threefry2x32(vec2u(0, seed), vec2u(0, lid));
+    randomize(rng, lid);
+    avl_remove(lid, 0u);
 }
