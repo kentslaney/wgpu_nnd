@@ -23,10 +23,12 @@ override knn_offset: u32;
 override knn_row_strides: u32;
 override knn_col_strides: u32;
 
-override scratch_offset: u32;
-override scratch_row_strides: u32;
-override scratch_col_strides: u32;
-override scratch_vox_strides: u32;
+override candidate_offset: u32 = 0u;
+override candidate_row_strides: u32 = candidates * 2u;
+override candidate_col_strides: u32 = 2u;
+override candidate_vox_strides: u32 = 1u;
+
+var<workgroup> candidate_buffer: array<atomic<i32>, points * candidates * 2>;
 
 override avl_offset: u32;
 override avl_row_strides: u32;
@@ -55,20 +57,20 @@ fn distances_set(row: u32, col: u32, value: f32) {
         col * distances_col_strides] = value;
 }
 
-fn scratch_get(row: u32, col: u32, vox: u32) -> i32 {
-    return scratch[
-        scratch_offset +
-        row * scratch_row_strides +
-        col * scratch_col_strides +
-        vox * scratch_vox_strides];
+fn candidate_get(row: u32, col: u32, vox: u32) -> i32 {
+    return atomicLoad(&candidate_buffer[
+        candidate_offset +
+        row * candidate_row_strides +
+        col * candidate_col_strides +
+        vox * candidate_vox_strides]);
 }
 
-fn scratch_set(row: u32, col: u32, vox: u32, value: i32) {
-    scratch[
-        scratch_offset +
-        row * scratch_row_strides +
-        col * scratch_col_strides +
-        vox * scratch_vox_strides] = value;
+fn candidate_set(row: u32, col: u32, vox: u32, value: i32) {
+    atomicStore(&candidate_buffer[
+        candidate_offset +
+        row * candidate_row_strides +
+        col * candidate_col_strides +
+        vox * candidate_vox_strides], value);
 }
 
 fn avl_get(row: u32, col: u32, vox: u32) -> i32 {

@@ -8,7 +8,6 @@ async fn run() {
     let data = buffers_input.data.as_mut_slice();
     let distances = buffers_input.distances.as_mut_slice();
     let buffers = WgslSlices {
-        scratch: buffers_input.scratch.as_mut_slice(),
         avl: buffers_input.avl.as_mut_slice(),
         meta: buffers_input.meta.as_mut_slice(),
     };
@@ -58,9 +57,6 @@ async fn run() {
         mapped_at_creation: false,
     });
     debug_assert!(
-        size_of_val(buffers.scratch) as u32 / 4 == info.scratch_info.offset +
-        info.scratch_info.row_strides * info.scratch_info.rows);
-    debug_assert!(
         size_of_val(buffers.avl) as u32 / 4 == info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows);
     debug_assert!(
@@ -70,7 +66,7 @@ async fn run() {
         &wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&[
-                &buffers.scratch[..], &buffers.avl, &buffers.meta].concat()),
+                &buffers.avl[..], &buffers.meta].concat()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
     #[cfg(debug_assertions)]
@@ -81,8 +77,7 @@ async fn run() {
         mapped_at_creation: false,
     });
     #[cfg(debug_assertions)]
-    let scratch_size = size_of_val(buffers.scratch) + size_of_val(buffers.avl) +
-        size_of_val(buffers.meta);
+    let scratch_size = size_of_val(buffers.avl) + size_of_val(buffers.meta);
     #[cfg(debug_assertions)]
     let debug_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
@@ -174,9 +169,7 @@ async fn run() {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
-    let avl_offset = info.scratch_info.offset +
-        info.scratch_info.row_strides * info.scratch_info.rows;
-    let meta_offset = avl_offset + info.avl_info.offset +
+    let meta_offset = info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows;
     let pipeline_options = wgpu::PipelineCompilationOptions {
         constants: &[
@@ -199,15 +192,7 @@ async fn run() {
             ("knn_row_strides".to_owned(), info.knn_info.row_strides.into()),
             ("knn_col_strides".to_owned(), info.knn_info.col_strides.into()),
 
-            ("scratch_offset".to_owned(), info.scratch_info.offset.into()),
-            ("scratch_row_strides".to_owned(),
-                info.scratch_info.row_strides.into()),
-            ("scratch_col_strides".to_owned(),
-                info.scratch_info.col_strides.into()),
-            ("scratch_vox_strides".to_owned(),
-                info.scratch_info.vox_strides.into()),
-
-            ("avl_offset".to_owned(), avl_offset.into()),
+            ("avl_offset".to_owned(), info.avl_info.offset.into()),
             ("avl_row_strides".to_owned(), info.avl_info.row_strides.into()),
             ("avl_col_strides".to_owned(), info.avl_info.col_strides.into()),
             ("avl_vox_strides".to_owned(), info.avl_info.vox_strides.into()),
@@ -309,14 +294,10 @@ async fn get_data<T: bytemuck::Pod>(
 
 fn visualize(info: &WgslArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
     log::info!("Distances: {:?}", distances);
-    let avl_offset = (info.scratch_info.offset +
-        info.scratch_info.row_strides * info.scratch_info.rows) as usize;
-    let meta_offset = (avl_offset as u32 + info.avl_info.offset +
+    let meta_offset = (info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows) as usize;
-    let candidates = &debug[info.scratch_info.offset as usize..avl_offset];
-    let avl = &debug[avl_offset + (info.avl_info.offset as usize)..meta_offset];
+    let avl = &debug[info.avl_info.offset as usize..meta_offset];
     let meta = &debug[meta_offset + (info.meta_info.offset as usize)..];
-    log::info!("Candidates: {:?}", candidates);
     log::info!("Meta: {:?}", meta);
     for i in 0..info.knn_info.rows {
         let row_knn = &knn[
