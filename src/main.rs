@@ -6,7 +6,6 @@ async fn run() {
     let (info, mut buffers_input) = cli();
     let knn = buffers_input.knn.as_mut_slice();
     let data = buffers_input.data.as_mut_slice();
-    let distances = buffers_input.distances.as_mut_slice();
     let buffers = WgslSlices {
         avl: buffers_input.avl.as_mut_slice(),
         meta: buffers_input.meta.as_mut_slice(),
@@ -38,12 +37,6 @@ async fn run() {
             contents: bytemuck::cast_slice(&data[..]),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
-    let storage_buffer_distances = device.create_buffer_init(
-        &wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&distances[..]),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        });
     let storage_buffer_knn = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
@@ -69,13 +62,6 @@ async fn run() {
                 &buffers.avl[..], &buffers.meta].concat()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
-    #[cfg(debug_assertions)]
-    let debug_distances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: size_of_val(distances) as u64,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
     #[cfg(debug_assertions)]
     let scratch_size = size_of_val(buffers.avl) + size_of_val(buffers.meta);
     #[cfg(debug_assertions)]
@@ -126,18 +112,6 @@ async fn run() {
                     },
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage {
-                            read_only: false
-                        },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
             ],
         });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -150,14 +124,10 @@ async fn run() {
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: storage_buffer_distances.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
                 resource: storage_buffer_knn.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 3,
+                binding: 2,
                 resource: storage_buffer_scratch.as_entire_binding(),
             },
         ],
@@ -181,12 +151,6 @@ async fn run() {
             ("data_offset".to_owned(), info.data_info.offset.into()),
             ("data_row_strides".to_owned(), info.data_info.row_strides.into()),
             ("data_col_strides".to_owned(), info.data_info.col_strides.into()),
-
-            ("distances_offset".to_owned(), info.distances_info.offset.into()),
-            ("distances_row_strides".to_owned(),
-                info.distances_info.row_strides.into()),
-            ("distances_col_strides".to_owned(),
-                info.distances_info.col_strides.into()),
 
             ("knn_offset".to_owned(), info.knn_info.offset.into()),
             ("knn_row_strides".to_owned(), info.knn_info.row_strides.into()),
@@ -238,19 +202,6 @@ async fn run() {
     )
     .await;
     #[cfg(debug_assertions)]
-    let mut distances = unsafe {
-        Box::<[f32]>::new_uninit_slice(size_of_val(distances) / 4).assume_init()
-    };
-    #[cfg(debug_assertions)]
-    get_data(
-        &mut distances[..],
-        &storage_buffer_distances,
-        &debug_distances_buffer,
-        &device,
-        &queue,
-    )
-    .await;
-    #[cfg(debug_assertions)]
     let mut debug = unsafe {
         Box::<[i32]>::new_uninit_slice(scratch_size / 4).assume_init()
     };
@@ -266,7 +217,7 @@ async fn run() {
 
     log::info!("Output: {:?}", knn);
     #[cfg(debug_assertions)]
-    visualize(&info, &knn, &distances, &debug);
+    visualize(&info, &knn, &debug);
 }
 
 async fn get_data<T: bytemuck::Pod>(
@@ -292,8 +243,7 @@ async fn get_data<T: bytemuck::Pod>(
     staging_buffer.unmap();
 }
 
-fn visualize(info: &WgslArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
-    log::info!("Distances: {:?}", distances);
+fn visualize(info: &WgslArgs, knn: &[i32], debug: &[i32]) {
     let meta_offset = (info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows) as usize;
     let avl = &debug[info.avl_info.offset as usize..meta_offset];
@@ -303,14 +253,7 @@ fn visualize(info: &WgslArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
         let row_knn = &knn[
                 (i * info.knn_info.row_strides) as usize..
                 (i * info.knn_info.row_strides +
-                    info.distances_info.col_strides *
-                    info.knn_info.cols) as usize
-            ];
-        let row_distances = &distances[
-                (i * info.distances_info.row_strides) as usize..
-                (i * info.distances_info.row_strides +
-                    info.distances_info.col_strides *
-                    info.distances_info.cols) as usize
+                    info.knn_info.col_strides * info.knn_info.cols) as usize
             ];
         let row_avl = &avl[
                 (i * info.avl_info.row_strides) as usize..
@@ -319,7 +262,7 @@ fn visualize(info: &WgslArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
                     info.avl_info.cols) as usize
             ];
         let tree = walk(
-            row_knn, row_distances, row_avl,
+            row_knn, row_avl,
             info.data_info.rows as i32,
             info.avl_info.col_strides as usize,
             meta[(info.meta_info.row_strides * i) as usize],
@@ -333,7 +276,6 @@ fn visualize(info: &WgslArgs, knn: &[i32], distances: &[f32], debug: &[i32]) {
 
 fn walk(
     knn: &[i32],
-    distances: &[f32],
     avl: &[i32],
     points: i32,
     strides: usize,
@@ -350,15 +292,15 @@ fn walk(
     let u = avl[node as usize * strides + 3];
     if l == -1 && r == -1 {
         line.push_str(&format!(
-            "\u{2500}({}^{}h{}) {} {}\n",
-            node, u, h, knn[node as usize] % points, distances[node as usize]));
+            "\u{2500}({}^{}h{}) {}\n",
+            node, u, h, knn[node as usize] % points));
     } else {
         line.push_str(&format!(
-            "\u{252C}({}^{}h{}) {} {}\n",
-            node, u, h, knn[node as usize] % points, distances[node as usize]));
-        line.push_str(&walk(knn, distances, avl, points, strides, l, format!(
+            "\u{252C}({}^{}h{}) {}\n",
+            node, u, h, knn[node as usize] % points));
+        line.push_str(&walk(knn, avl, points, strides, l, format!(
             "{}\u{2502}", prefix), "\u{251C}".to_owned()));
-        line.push_str(&walk(knn, distances, avl, points, strides, r, format!(
+        line.push_str(&walk(knn, avl, points, strides, r, format!(
             "{}\u{2007}", prefix), "\u{2514}".to_owned()));
     }
     line

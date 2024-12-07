@@ -1,8 +1,7 @@
 // max_bind_groups with wgpu is 4
 @group(0) @binding(0) var<storage, read>       data:      array<f32>;
-@group(0) @binding(1) var<storage, read_write> distances: array<f32>;
-@group(0) @binding(2) var<storage, read_write> knn:       array<i32>;
-@group(0) @binding(3) var<storage, read_write> scratch:   array<i32>;
+@group(0) @binding(1) var<storage, read_write> knn:       array<i32>;
+@group(0) @binding(2) var<storage, read_write> scratch:   array<i32>;
 
 override k: u32 = 15u;
 override candidates: u32 = 15u;
@@ -15,20 +14,24 @@ override data_offset: u32;
 override data_row_strides: u32;
 override data_col_strides: u32;
 
-override distances_offset: u32;
-override distances_row_strides: u32;
-override distances_col_strides: u32;
+var<workgroup> distances: array<f32, points * k>;
+
+override distances_offset: u32 = 0u;
+override distances_row_strides: u32 = k;
+override distances_col_strides: u32 = 1u;
 
 override knn_offset: u32;
 override knn_row_strides: u32;
 override knn_col_strides: u32;
 
 override candidate_offset: u32 = 0u;
-override candidate_row_strides: u32 = candidates * 2u;
+override candidate_row_strides: u32 = candidates * candidate_col_strides;
 override candidate_col_strides: u32 = 2u;
 override candidate_vox_strides: u32 = 1u;
 
-var<workgroup> candidate_buffer: array<atomic<i32>, points * candidates * 2>;
+var<workgroup> candidate_buffer:
+    array<atomic<i32>, points * candidate_row_strides>;
+var<workgroup> reverse_ticket: array<atomic<u32>, points>;
 
 override avl_offset: u32;
 override avl_row_strides: u32;
