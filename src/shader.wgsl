@@ -31,7 +31,8 @@ override candidate_vox_strides: u32 = 1u;
 
 var<workgroup> candidate_buffer:
     array<atomic<i32>, points * candidate_row_strides>;
-var<workgroup> reverse_ticket: array<atomic<u32>, points>;
+var<workgroup> reverse_ticket:
+    array<atomic<u32>, points * candidate_col_strides>;
 
 override avl_offset: u32;
 override avl_row_strides: u32;
@@ -570,6 +571,16 @@ fn randomize(rng: vec2u, row: u32) {
         let rand = i32(big_mod(threefry2x32(rng, vec2u(0u, i)), points));
         avl_push(row, rand);
     }
+}
+
+fn todo_build() {
+    // split knn by flag into candidate buffer in front of -1
+    //     and put counts into reverse_ticket.
+    // for each neighbor, atomic exchange reverse_ticket with
+    //     ticket = (reverse_ticket + 1)
+    // if exchange result >= ticket, retry above
+    // if ticket is greater than or equal to candidates, multiply by uniform
+    // atomic max with ticket number position in flag's neighbor's row
 }
 
 @compute
