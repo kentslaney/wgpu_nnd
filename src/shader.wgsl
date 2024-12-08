@@ -77,6 +77,33 @@ fn candidate_set(row: u32, col: u32, vox: u32, value: i32) {
         vox * candidate_vox_strides], value);
 }
 
+fn candidate_max(row: u32, col: u32, vox: u32, value: i32) {
+    atomicMax(&candidate_buffer[
+        candidate_offset +
+        row * candidate_row_strides +
+        col * candidate_col_strides +
+        vox * candidate_vox_strides], value);
+}
+
+fn ticket_get(row: u32, col: u32) -> u32 {
+    return atomicLoad(&reverse_ticket[row * 2u + col]);
+}
+
+fn ticket_set(row: u32, col: u32, value: u32) {
+    atomicStore(&reverse_ticket[row * 2u + col], value);
+}
+
+fn ticket_take(row: u32, col: u32) -> u32 {
+    loop {
+        let ticket = ticket_get(row, col) + 1;
+        let res = atomicExchange(&reverse_ticket[row * 2u + col], ticket);
+        if (res < ticket) {
+            return ticket;
+        }
+    }
+    return 0u;
+}
+
 fn avl_get(row: u32, col: u32, vox: u32) -> i32 {
     return scratch[
         avl_offset +
@@ -576,11 +603,9 @@ fn randomize(rng: vec2u, row: u32) {
 fn todo_build() {
     // split knn by flag into candidate buffer in front of -1
     //     and put counts into reverse_ticket.
-    // for each neighbor, atomic exchange reverse_ticket with
-    //     ticket = (reverse_ticket + 1)
-    // if exchange result >= ticket, retry above
+    // ticket_take
     // if ticket is greater than or equal to candidates, multiply by uniform
-    // atomic max with ticket number position in flag's neighbor's row
+    // candidate_max
 }
 
 @compute
