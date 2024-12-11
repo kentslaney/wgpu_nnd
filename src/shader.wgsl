@@ -3,6 +3,10 @@
 @group(0) @binding(1) var<storage, read_write> knn:       array<i32>;
 @group(0) @binding(2) var<storage, read_write> scratch:   array<i32>;
 
+/*************************/
+/* tensor alignment data */
+/*************************/
+
 override k: u32 = 15u;
 override candidates: u32 = 15u;
 override seed: u32 = 0u;
@@ -29,10 +33,16 @@ override candidate_row_strides: u32 = candidates * candidate_col_strides;
 override candidate_col_strides: u32 = 2u;
 override candidate_vox_strides: u32 = 1u;
 
+override reservations_row_strides: u32 = (
+    reservations_vox_strides * knn_row_strides);
+override reservations_col_strides: u32 = 2u;
+override reservations_vox_strides: u32 = 1u;
+
 var<workgroup> candidate_buffer:
     array<atomic<i32>, points * candidate_row_strides>;
 var<workgroup> reverse_ticket:
-    array<atomic<u32>, points * candidate_col_strides>;
+    array<atomic<i32>, points * candidate_col_strides>;
+var<workgroup> reservations: array<vec2i, points * reservations_row_strides>;
 
 override avl_offset: u32;
 override avl_row_strides: u32;
@@ -42,6 +52,10 @@ override avl_vox_strides: u32;
 override meta_offset: u32;
 override meta_row_strides: u32;
 override meta_col_strides: u32;
+
+/***********************/
+/* tensor access utils */
+/***********************/
 
 fn data_get(row: u32, col: u32) -> f32 {
     return data[data_offset + row * data_row_strides + col * data_col_strides];
@@ -85,23 +99,25 @@ fn candidate_max(row: u32, col: u32, vox: u32, value: i32) {
         vox * candidate_vox_strides], value);
 }
 
-fn ticket_get(row: u32, col: u32) -> u32 {
-    return atomicLoad(&reverse_ticket[row * 2u + col]);
+fn ticket_get(row: u32, col: u32) -> i32 {
+    return atomicLoad(&reverse_ticket[row * candidate_col_strides + col]);
 }
 
-fn ticket_set(row: u32, col: u32, value: u32) {
-    atomicStore(&reverse_ticket[row * 2u + col], value);
+fn ticket_reset(row: u32, col: u32) {
+    atomicStore(&reverse_ticket[row * candidate_col_strides + col], 0);
 }
 
-fn ticket_take(row: u32, col: u32) -> u32 {
+fn ticket_take(row: u32, col: u32) -> i32 {
     loop {
-        let ticket = ticket_get(row, col) + 1;
-        let res = atomicExchange(&reverse_ticket[row * 2u + col], ticket);
-        if (res < ticket) {
+        let ticket = ticket_get(row, col);
+        let res = atomicCompareExchangeWeak(
+            &reverse_ticket[row * candidate_col_strides + col],
+            ticket, ticket + 1);
+        if (res.exchanged) {
             return ticket;
         }
     }
-    return 0u;
+    return 0;
 }
 
 fn avl_get(row: u32, col: u32, vox: u32) -> i32 {
@@ -169,6 +185,24 @@ fn flag_reset(row: u32, col: u32) {
             col * knn_col_strides
         ] % i32(points);
 }
+
+fn reservations_get(row: u32, col: u32, vox: u32) -> vec2i {
+    return reservations[
+        row * reservations_row_strides +
+        col * reservations_col_strides +
+        vox * reservations_vox_strides];
+}
+
+fn reservations_set(row: u32, col: u32, vox: u32, value: vec2i) {
+    reservations[
+        row * reservations_row_strides +
+        col * reservations_col_strides +
+        vox * reservations_vox_strides] = value;
+}
+
+/**************************/
+/* heap impl b/c original */
+/**************************/
 
 fn index_swap(row: u32, col0: u32, col1: u32) {
     let idx0 = knn[knn_offset + row * knn_row_strides + col0 * knn_col_strides];
@@ -239,6 +273,10 @@ fn push(row: u32, candidate: i32) {
     sifted(row);
 }
 
+/************/
+/* avl impl */
+/************/
+
 const avl_height = 0u;
 const avl_left = 1u;
 const avl_right = 2u;
@@ -246,7 +284,6 @@ const avl_up = 3u;
 
 const avl_root = 0u;
 const avl_max = 1u;
-const avl_link = 2u;
 
 fn avl_depth(row: u32, col: i32) -> i32 {
     if (col < 0) { return 0; }
@@ -547,6 +584,10 @@ fn avl_push(row: u32, candidate: i32) {
     avl_set_max(row);
 }
 
+/************/
+/* rng impl */
+/************/
+
 fn rotate_left(x: u32, d: u32) -> u32 {
     return x << d | x >> (32 - d);
 }
@@ -600,18 +641,60 @@ fn randomize(rng: vec2u, row: u32) {
     }
 }
 
-fn todo_build() {
-    // split knn by flag into candidate buffer in front of -1
-    //     and put counts into reverse_ticket.
-    // ticket_take
-    // if ticket is greater than or equal to candidates, multiply by uniform
-    // candidate_max
+fn split(rng: vec2u, iota: u32) -> vec2u {
+    return threefry2x32(rng, vec2u(0, iota));
+}
+
+/**********************/
+/* reservoir sampling */
+/**********************/
+
+fn reservoir(ticket: i32, rng: vec2u, iota: vec2u) -> i32 {
+    if (u32(ticket) >= candidates) {
+        let x = bitcast_mantissa(threefry2x32(rng, iota).x);
+        return i32(floor(x * f32(ticket)));
+    }
+    return ticket;
+}
+
+fn reserve(
+    rng: vec2u,
+    row: u32,
+    col: u32,
+    source: u32,
+    other: u32,
+    direction: u32,
+    flag: u32,
+) {
+    let ticket = ticket_take(other, flag);
+    let overlay = reservoir(ticket, rng, vec2u(direction, col));
+    if (u32(overlay) < candidates) {
+        candidate_max(other, u32(overlay), flag, ticket);
+    }
+    reservations_set(row, col, direction, vec2i(ticket, overlay));
+}
+
+fn build(rng: vec2u, row: u32) {
+    for (var i = 0u; i < k; i++) {
+        let other = knn_get(row, i);
+        if (other < 0) { continue; }
+        reserve(rng, row, i, u32(other), row, 0u, u32(flag_get(row, i)));
+    }
+    // separate for cache coherence
+    for (var i = 0u; i < k; i++) {
+        let other = knn_get(row, i);
+        if (other < 0) { continue; }
+        reserve(rng, row, i, row, u32(other), 1u, u32(flag_get(row, i)));
+    }
+    storageBarrier();
+    // TODO: go back to other and replace with candidate if ticket matches
+    // TODO: use atomicExchange on tails to create links
 }
 
 @compute
 @workgroup_size(points)
 fn main(@builtin(local_invocation_index) lid: u32) {
-    let rng = threefry2x32(vec2u(0, seed), vec2u(0, lid));
+    let rng = split(vec2u(0, seed), lid);
     randomize(rng, lid);
     avl_remove(lid, 0u);
 }
