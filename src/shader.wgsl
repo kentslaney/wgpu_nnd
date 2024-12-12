@@ -53,6 +53,11 @@ override meta_offset: u32;
 override meta_row_strides: u32;
 override meta_col_strides: u32;
 
+override link_offset: u32;
+override link_row_strides: u32;
+override link_col_strides: u32;
+override link_vox_strides: u32;
+
 /***********************/
 /* tensor access utils */
 /***********************/
@@ -103,8 +108,8 @@ fn ticket_get(row: u32, col: u32) -> i32 {
     return atomicLoad(&reverse_ticket[row * candidate_col_strides + col]);
 }
 
-fn ticket_reset(row: u32, col: u32) {
-    atomicStore(&reverse_ticket[row * candidate_col_strides + col], 0);
+fn ticket_set(row: u32, col: u32, value: i32) {
+    atomicStore(&reverse_ticket[row * candidate_col_strides + col], value);
 }
 
 fn ticket_take(row: u32, col: u32) -> i32 {
@@ -118,6 +123,11 @@ fn ticket_take(row: u32, col: u32) -> i32 {
         }
     }
     return 0;
+}
+
+fn ticket_exchange(row: u32, col: u32, value: i32) -> i32 {
+    return atomicExchange(
+        &reverse_ticket[row * candidate_col_strides + col], value);
 }
 
 fn avl_get(row: u32, col: u32, vox: u32) -> i32 {
@@ -148,6 +158,22 @@ fn meta_set(row: u32, col: u32, value: i32) {
         meta_offset +
         row * meta_row_strides +
         col * meta_col_strides] = value;
+}
+
+fn link_get(row: u32, col: u32, vox: u32) -> i32 {
+    return scratch[
+        link_offset +
+        row * link_row_strides +
+        col * link_col_strides +
+        vox * link_vox_strides];
+}
+
+fn link_set(row: u32, col: u32, vox: u32, value: i32) {
+    scratch[
+        link_offset +
+        row * link_row_strides +
+        col * link_col_strides +
+        vox * link_vox_strides] = value;
 }
 
 fn knn_get(row: u32, col: u32) -> i32 {
@@ -621,7 +647,9 @@ fn threefry2x32(k: vec2u, x: vec2u) -> vec2u {
 }
 
 fn bitcast_mantissa(x: u32) -> f32 {
-    return bitcast<f32>(0x007FFFFF & x) - 1.;
+    // TODO
+    return f32(x) / (f32(0xFFFFFFFF) + 1.);
+    //return bitcast<f32>(0x007FFFFF & x) - 1.;
 }
 
 // big endian; necessary to guarantee span << rng result
@@ -686,15 +714,32 @@ fn build(rng: vec2u, row: u32) {
         if (other < 0) { continue; }
         reserve(rng, row, i, row, u32(other), 1u, u32(flag_get(row, i)));
     }
+    for (var i = 0u; i < candidates; i++) {
+        link_set(row, i, 0u, candidate_get(row, i, 0u));
+        link_set(row, i, 1u, candidate_get(row, i, 1u));
+    }
+    /*
     storageBarrier();
-    // TODO: go back to other and replace with candidate if ticket matches
+    for (var i = 0u; i < 2; i++) {
+        ticket_set(row, i, -1);
+    }
+    storageBarrier();
+    for (var i = 0u; i < k; i++) {
+        let other = knn_get(row, i);
+        if (other < 0) { continue; }
+        let ticket = reservations_get(row, i, 0u);
+        let cmp = candidate_get(row, u32(ticket.y), u32(flag_get(row, i)));
+        if (cmp != ticket.x) { continue; }
+        let linking = ticket_exchange(u32(other), 0u, i32(row));
+        link_set(row, u32(ticket.y), 0u, linking);
+    }
     // TODO: use atomicExchange on tails to create links
+    */
 }
 
 @compute
 @workgroup_size(points)
 fn main(@builtin(local_invocation_index) lid: u32) {
-    let rng = split(vec2u(0, seed), lid);
-    randomize(rng, lid);
-    avl_remove(lid, 0u);
+    randomize(split(vec2u(0, seed), lid), lid);
+    build(split(vec2u(1, seed), lid), lid);
 }

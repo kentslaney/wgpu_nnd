@@ -48,6 +48,7 @@ pub struct WgslArgs {
     pub knn_info: WgslArray2Info,
     pub avl_info: WgslArray3Info,
     pub meta_info: WgslArray2Info,
+    pub link_info: WgslArray3Info,
     pub candidates: u32,
 }
 
@@ -56,11 +57,13 @@ pub struct WgslBuffers {
     pub knn: Vec<i32>,
     pub avl: Vec<i32>,
     pub meta: Vec<i32>,
+    pub link: Vec<i32>,
 }
 
 pub struct WgslSlices<'a> {
     pub avl: &'a [i32],
     pub meta: &'a [i32],
+    pub link: &'a [i32],
 }
 
 pub fn cli_npy(idx: usize) -> (WgslArray2Info, Vec<f32>) {
@@ -79,21 +82,26 @@ pub fn cli() -> (WgslArgs, WgslBuffers) {
     let avl_init = RawArray3::new(
         -Array3::<i32>::ones((data_info.rows as usize, k, 4)));
     let meta_init = RawArray2::new(
-        -Array2::<i32>::ones((data_info.rows as usize, 2)));
+        -Array2::<i32>::ones((data_info.rows as usize, 3)));
+    let link_init = RawArray3::new(
+        -Array3::<i32>::ones((data_info.rows as usize, candidates, 2)));
     let (knn_info, knn_input) = WgslArray2Info::new(knn_init);
     let (avl_info, avl_input) = WgslArray3Info::new(avl_init);
     let (meta_info, meta_input) = WgslArray2Info::new(meta_init);
+    let (link_info, link_input) = WgslArray3Info::new(link_init);
     (WgslArgs {
         data_info: data_info,
         knn_info: knn_info,
         avl_info: avl_info,
         meta_info: meta_info,
+        link_info: link_info,
         candidates: candidates as u32,
     }, WgslBuffers {
         data: data_input,
         knn: knn_input,
         avl: avl_input,
         meta: meta_input,
+        link: link_input,
     })
 }
 

@@ -9,6 +9,7 @@ async fn run() {
     let buffers = WgslSlices {
         avl: buffers_input.avl.as_mut_slice(),
         meta: buffers_input.meta.as_mut_slice(),
+        link: buffers_input.link.as_mut_slice(),
     };
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -55,15 +56,19 @@ async fn run() {
     debug_assert!(
         size_of_val(buffers.meta) as u32 / 4 == info.meta_info.offset +
         info.meta_info.row_strides * info.meta_info.rows);
+    debug_assert!(
+        size_of_val(buffers.link) as u32 / 4 == info.link_info.offset +
+        info.link_info.row_strides * info.link_info.rows);
     let storage_buffer_scratch = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&[
-                &buffers.avl[..], &buffers.meta].concat()),
+                &buffers.avl[..], &buffers.meta, &buffers.link].concat()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
     #[cfg(debug_assertions)]
-    let scratch_size = size_of_val(buffers.avl) + size_of_val(buffers.meta);
+    let scratch_size = size_of_val(buffers.avl) + size_of_val(buffers.meta) +
+        size_of_val(buffers.link);
     #[cfg(debug_assertions)]
     let debug_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
@@ -141,6 +146,8 @@ async fn run() {
         });
     let meta_offset = info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows;
+    let link_offset = meta_offset + info.meta_info.offset +
+        info.meta_info.row_strides * info.meta_info.rows;
     let pipeline_options = wgpu::PipelineCompilationOptions {
         constants: &[
             ("k".to_owned(), info.knn_info.cols.into()),
@@ -164,6 +171,11 @@ async fn run() {
             ("meta_offset".to_owned(), meta_offset.into()),
             ("meta_row_strides".to_owned(), info.meta_info.row_strides.into()),
             ("meta_col_strides".to_owned(), info.meta_info.col_strides.into()),
+
+            ("link_offset".to_owned(), link_offset.into()),
+            ("link_row_strides".to_owned(), info.link_info.row_strides.into()),
+            ("link_col_strides".to_owned(), info.link_info.col_strides.into()),
+            ("link_vox_strides".to_owned(), info.link_info.vox_strides.into()),
         ].into(), ..Default::default()};
     let pipeline = device.create_compute_pipeline(
         &wgpu::ComputePipelineDescriptor {
@@ -246,8 +258,13 @@ async fn get_data<T: bytemuck::Pod>(
 fn visualize(info: &WgslArgs, knn: &[i32], debug: &[i32]) {
     let meta_offset = (info.avl_info.offset +
         info.avl_info.row_strides * info.avl_info.rows) as usize;
+    let link_offset = meta_offset + (info.meta_info.offset +
+        info.meta_info.row_strides * info.meta_info.rows) as usize;
     let avl = &debug[info.avl_info.offset as usize..meta_offset];
-    let meta = &debug[meta_offset + (info.meta_info.offset as usize)..];
+    let meta = &debug[
+        meta_offset + (info.meta_info.offset as usize)..link_offset];
+    let link = &debug[
+        link_offset + (info.link_info.offset as usize)..];
     log::info!("Meta: {:?}", meta);
     for i in 0..info.knn_info.rows {
         let row_knn = &knn[
@@ -258,9 +275,12 @@ fn visualize(info: &WgslArgs, knn: &[i32], debug: &[i32]) {
         let row_avl = &avl[
                 (i * info.avl_info.row_strides) as usize..
                 (i * info.avl_info.row_strides +
-                    info.avl_info.col_strides *
-                    info.avl_info.cols) as usize
+                    info.avl_info.col_strides * info.avl_info.cols) as usize
             ];
+        let row_link = &link[
+                (i * info.link_info.row_strides) as usize..
+                (i * info.link_info.row_strides +
+                    info.link_info.col_strides * info.link_info.cols) as usize];
         let tree = walk(
             row_knn, row_avl,
             info.data_info.rows as i32,
@@ -270,6 +290,7 @@ fn visualize(info: &WgslArgs, knn: &[i32], debug: &[i32]) {
             String::from("")
         );
         log::info!("AVL: {:?}", row_avl);
+        log::info!("link: {:?}", row_link);
         println!("{}", &tree[0..std::cmp::max(tree.len(), 1) - 1]);
     }
 }
