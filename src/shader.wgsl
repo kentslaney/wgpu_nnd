@@ -716,12 +716,6 @@ fn build(rng: vec2u, row: u32) {
         if (other < 0) { continue; }
         reserve(rng, row, i, row, u32(other), 1u, u32(flag_get(row, i)));
     }
-    /*
-    for (var i = 0u; i < candidates; i++) {
-        link_set(row, i, 0u, candidate_get(row, i, 0u));
-        link_set(row, i, 1u, candidate_get(row, i, 1u));
-    }
-    */
     storageBarrier();
     for (var i = 0u; i < 2; i++) {
         ticket_set(row, i, -1);
