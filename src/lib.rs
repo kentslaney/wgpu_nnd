@@ -82,7 +82,7 @@ pub fn cli() -> (WgslArgs, WgslBuffers) {
     let avl_init = RawArray3::new(
         -Array3::<i32>::ones((data_info.rows as usize, k, 4)));
     let meta_init = RawArray2::new(
-        -Array2::<i32>::ones((data_info.rows as usize, 3)));
+        -Array2::<i32>::ones((data_info.rows as usize, 4)));
     let link_init = RawArray3::new(
         -Array3::<i32>::ones((data_info.rows as usize, candidates, 2)));
     let (knn_info, knn_input) = WgslArray2Info::new(knn_init);

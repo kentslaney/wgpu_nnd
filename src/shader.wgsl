@@ -310,6 +310,8 @@ const avl_up = 3u;
 
 const avl_root = 0u;
 const avl_max = 1u;
+const avl_link_0 = 2u;
+const avl_link_1 = 3u;
 
 fn avl_depth(row: u32, col: i32) -> i32 {
     if (col < 0) { return 0; }
@@ -714,11 +716,12 @@ fn build(rng: vec2u, row: u32) {
         if (other < 0) { continue; }
         reserve(rng, row, i, row, u32(other), 1u, u32(flag_get(row, i)));
     }
+    /*
     for (var i = 0u; i < candidates; i++) {
         link_set(row, i, 0u, candidate_get(row, i, 0u));
         link_set(row, i, 1u, candidate_get(row, i, 1u));
     }
-    /*
+    */
     storageBarrier();
     for (var i = 0u; i < 2; i++) {
         ticket_set(row, i, -1);
@@ -728,13 +731,25 @@ fn build(rng: vec2u, row: u32) {
         let other = knn_get(row, i);
         if (other < 0) { continue; }
         let ticket = reservations_get(row, i, 0u);
-        let cmp = candidate_get(row, u32(ticket.y), u32(flag_get(row, i)));
+        let flag = flag_get(row, i);
+        let cmp = candidate_get(row, u32(ticket.y), u32(flag));
         if (cmp != ticket.x) { continue; }
         let linking = ticket_exchange(u32(other), 0u, i32(row));
         link_set(row, u32(ticket.y), 0u, linking);
     }
-    // TODO: use atomicExchange on tails to create links
-    */
+    for (var i = 0u; i < k; i++) {
+        let other = knn_get(row, i);
+        if (other < 0) { continue; }
+        let ticket = reservations_get(row, i, 1u);
+        let flag = flag_get(row, i);
+        let cmp = candidate_get(u32(other), u32(ticket.y), u32(flag));
+        if (cmp != ticket.x) { continue; }
+        let linking = ticket_exchange(row, 1u, other);
+        link_set(row, u32(ticket.y), 1u, linking);
+    }
+    storageBarrier();
+    meta_set(row, avl_link_0, ticket_get(row, 0));
+    meta_set(row, avl_link_1, ticket_get(row, 1));
 }
 
 @compute
