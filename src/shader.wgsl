@@ -721,6 +721,7 @@ fn build(rng: vec2u, row: u32) {
         ticket_set(row, i, -1);
     }
     storageBarrier();
+    // TODO: use index instead of row
     for (var i = 0u; i < k; i++) {
         let other = knn_get(row, i);
         if (other < 0) { continue; }
