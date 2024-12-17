@@ -713,8 +713,6 @@ fn build(rng: vec2u, row: u32) {
         if (other < 0) { continue; }
         reserve(rng, row, i, row, 0u, u32(flag_get(row, i)));
     }
-    // debugging; TODO: remove
-    storageBarrier();
     for (var i = 0u; i < k; i++) {
         let other = knn_get(row, i);
         if (other < 0) { continue; }
@@ -738,8 +736,6 @@ fn build(rng: vec2u, row: u32) {
             ticket.y * i32(link_col_strides) +
             i32(flag) * i32(link_vox_strides)));
         link_set(row, u32(ticket.y), u32(flag), linking);
-        // debugging; TODO: remove
-        link_set(row, u32(ticket.y), 0u, other);
     }
     for (var i = 0u; i < k; i++) {
         let other = knn_get(row, i);
@@ -754,8 +750,6 @@ fn build(rng: vec2u, row: u32) {
             ticket.y * i32(link_col_strides) +
             i32(flag) * i32(link_vox_strides)));
         link_set(u32(other), u32(ticket.y), u32(flag), linking);
-        // debugging; TODO: remove
-        link_set(u32(other), u32(ticket.y), 0u, i32(row));
     }
     storageBarrier();
     meta_set(row, avl_link_0, ticket_get(row, 0));
