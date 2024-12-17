@@ -34,7 +34,7 @@ override candidate_col_strides: u32 = 2u;
 override candidate_vox_strides: u32 = 1u;
 
 override reservations_row_strides: u32 = (
-    reservations_vox_strides * knn_row_strides);
+    reservations_col_strides * knn_row_strides);
 override reservations_col_strides: u32 = 2u;
 override reservations_vox_strides: u32 = 1u;
 
