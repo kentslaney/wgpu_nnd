@@ -707,6 +707,11 @@ fn build(rng: vec2u, row: u32) {
     for (var i = 0u; i < 2; i++) {
         ticket_set(row, i, 0);
     }
+    for (var i = 0u; i < candidates; i++) {
+        for (var j = 0u; j < 2; j++) {
+            candidate_set(row, i, j, -1);
+        }
+    }
     storageBarrier();
     for (var i = 0u; i < k; i++) {
         let other = knn_get(row, i);
@@ -736,6 +741,7 @@ fn build(rng: vec2u, row: u32) {
             ticket.y * i32(link_col_strides) +
             i32(flag) * i32(link_vox_strides)));
         link_set(row, u32(ticket.y), u32(flag), linking);
+        candidate_set(row, u32(ticket.y), u32(flag), -2 - other);
     }
     for (var i = 0u; i < k; i++) {
         let other = knn_get(row, i);
@@ -750,10 +756,16 @@ fn build(rng: vec2u, row: u32) {
             ticket.y * i32(link_col_strides) +
             i32(flag) * i32(link_vox_strides)));
         link_set(u32(other), u32(ticket.y), u32(flag), linking);
+        candidate_set(u32(other), u32(ticket.y), u32(flag), -2 - i32(row));
     }
     storageBarrier();
     meta_set(row, avl_link_0, ticket_get(row, 0));
     meta_set(row, avl_link_1, ticket_get(row, 1));
+    for (var i = 0u; i < candidates; i++) {
+        for (var j = 0u; j < 2; j++) {
+            candidate_set(row, i, j, -2 - candidate_get(row, i, j));
+        }
+    }
 }
 
 @compute

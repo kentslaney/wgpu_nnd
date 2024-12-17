@@ -211,12 +211,10 @@ pub fn visualize(info: &WgslArgs, knn: &[i32], debug: &[i32]) {
         );
         log::info!("AVL: {:?}", row_avl);
         log::info!("link: {:?}", row_link);
-        /*
         println!("row {} flag 0: {}", i, trace(
                 &info.link_info,
                 meta[(info.meta_info.row_strides * i + 2) as usize],
                 &link, &mut HashSet::new()));
-        */
         println!("row {} flag 1: {}", i, trace(
                 &info.link_info,
                 meta[(info.meta_info.row_strides * i + 3) as usize],
