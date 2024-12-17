@@ -691,7 +691,6 @@ fn reserve(
     rng: vec2u,
     row: u32,
     col: u32,
-    source: u32,
     other: u32,
     direction: u32,
     flag: u32,
@@ -705,42 +704,58 @@ fn reserve(
 }
 
 fn build(rng: vec2u, row: u32) {
-    for (var i = 0u; i < k; i++) {
-        let other = knn_get(row, i);
-        if (other < 0) { continue; }
-        reserve(rng, row, i, u32(other), row, 0u, u32(flag_get(row, i)));
+    for (var i = 0u; i < 2; i++) {
+        ticket_set(row, i, 0);
     }
-    // separate for cache coherence
+    storageBarrier();
     for (var i = 0u; i < k; i++) {
         let other = knn_get(row, i);
         if (other < 0) { continue; }
-        reserve(rng, row, i, row, u32(other), 1u, u32(flag_get(row, i)));
+        reserve(rng, row, i, row, 0u, u32(flag_get(row, i)));
+    }
+    // debugging; TODO: remove
+    storageBarrier();
+    for (var i = 0u; i < k; i++) {
+        let other = knn_get(row, i);
+        if (other < 0) { continue; }
+        reserve(rng, row, i, u32(other), 1u, u32(flag_get(row, i)));
     }
     storageBarrier();
     for (var i = 0u; i < 2; i++) {
         ticket_set(row, i, -1);
     }
     storageBarrier();
-    // TODO: use index instead of row
     for (var i = 0u; i < k; i++) {
         let other = knn_get(row, i);
         if (other < 0) { continue; }
         let ticket = reservations_get(row, i, 0u);
+        if (ticket.y >= i32(candidates)) { continue; }
         let flag = flag_get(row, i);
         let cmp = candidate_get(row, u32(ticket.y), u32(flag));
         if (cmp != ticket.x) { continue; }
-        let linking = ticket_exchange(u32(other), 0u, i32(row));
-        link_set(row, u32(ticket.y), 0u, linking);
+        let linking = ticket_exchange(u32(other), u32(flag), (
+            i32(row * link_row_strides) +
+            ticket.y * i32(link_col_strides) +
+            i32(flag) * i32(link_vox_strides)));
+        link_set(row, u32(ticket.y), u32(flag), linking);
+        // debugging; TODO: remove
+        link_set(row, u32(ticket.y), 0u, other);
     }
     for (var i = 0u; i < k; i++) {
         let other = knn_get(row, i);
         if (other < 0) { continue; }
         let ticket = reservations_get(row, i, 1u);
+        if (ticket.y >= i32(candidates)) { continue; }
         let flag = flag_get(row, i);
         let cmp = candidate_get(u32(other), u32(ticket.y), u32(flag));
         if (cmp != ticket.x) { continue; }
-        let linking = ticket_exchange(row, 1u, other);
-        link_set(row, u32(ticket.y), 1u, linking);
+        let linking = ticket_exchange(row, u32(flag), (
+            other * i32(link_row_strides) +
+            ticket.y * i32(link_col_strides) +
+            i32(flag) * i32(link_vox_strides)));
+        link_set(u32(other), u32(ticket.y), u32(flag), linking);
+        // debugging; TODO: remove
+        link_set(u32(other), u32(ticket.y), 0u, i32(row));
     }
     storageBarrier();
     meta_set(row, avl_link_0, ticket_get(row, 0));

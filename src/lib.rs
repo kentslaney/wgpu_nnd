@@ -1,4 +1,4 @@
-use std::{fs::File, str::FromStr};
+use std::{fs::File, str::FromStr, collections::HashSet};
 use ndarray::{Array2, Array3};
 use ndarray_npy::ReadNpyExt;
 use bytemuck_derive::{Pod, Zeroable};
@@ -173,4 +173,109 @@ impl WgslArray3Info {
             vox_strides: raw.strides[2],
         }, raw.data)
     }
+}
+
+pub fn visualize(info: &WgslArgs, knn: &[i32], debug: &[i32]) {
+    let meta_offset = (info.avl_info.offset +
+        info.avl_info.row_strides * info.avl_info.rows) as usize;
+    let link_offset = meta_offset + (info.meta_info.offset +
+        info.meta_info.row_strides * info.meta_info.rows) as usize;
+    let avl = &debug[info.avl_info.offset as usize..meta_offset];
+    let meta = &debug[
+        meta_offset + (info.meta_info.offset as usize)..link_offset];
+    let link = &debug[
+        link_offset + (info.link_info.offset as usize)..];
+    log::info!("Meta: {:?}", meta);
+    for i in 0..info.knn_info.rows {
+        let row_knn = &knn[
+                (i * info.knn_info.row_strides) as usize..
+                (i * info.knn_info.row_strides +
+                    info.knn_info.col_strides * info.knn_info.cols) as usize
+            ];
+        let row_avl = &avl[
+                (i * info.avl_info.row_strides) as usize..
+                (i * info.avl_info.row_strides +
+                    info.avl_info.col_strides * info.avl_info.cols) as usize
+            ];
+        let row_link = &link[
+                (i * info.link_info.row_strides) as usize..
+                (i * info.link_info.row_strides +
+                    info.link_info.col_strides * info.link_info.cols) as usize];
+        let tree = walk(
+            row_knn, row_avl,
+            info.data_info.rows as i32,
+            info.avl_info.col_strides as usize,
+            meta[(info.meta_info.row_strides * i) as usize],
+            String::from(""),
+            String::from("")
+        );
+        log::info!("AVL: {:?}", row_avl);
+        log::info!("link: {:?}", row_link);
+        /*
+        println!("row {} flag 0: {}", i, trace(
+                &info.link_info,
+                meta[(info.meta_info.row_strides * i + 2) as usize],
+                &link, &mut HashSet::new()));
+        */
+        println!("row {} flag 1: {}", i, trace(
+                &info.link_info,
+                meta[(info.meta_info.row_strides * i + 3) as usize],
+                &link, &mut HashSet::new()));
+        println!("{}", &tree[0..std::cmp::max(tree.len(), 1) - 1]);
+    }
+}
+
+fn walk(
+    knn: &[i32],
+    avl: &[i32],
+    points: i32,
+    strides: usize,
+    node: i32,
+    prefix: String,
+    postfix: String
+) -> String {
+    if node == -1 { return "".to_owned(); }
+    let mut line = format!(
+        "{}{}", &prefix[0..std::cmp::max(prefix.len(), 3) - 3], postfix);
+    let h = avl[node as usize * strides + 0];
+    let l = avl[node as usize * strides + 1];
+    let r = avl[node as usize * strides + 2];
+    let u = avl[node as usize * strides + 3];
+    if l == -1 && r == -1 {
+        line.push_str(&format!(
+            "\u{2500}({}^{}h{}) {}\n",
+            node, u, h, knn[node as usize] % points));
+    } else {
+        line.push_str(&format!(
+            "\u{252C}({}^{}h{}) {}\n",
+            node, u, h, knn[node as usize] % points));
+        line.push_str(&walk(knn, avl, points, strides, l, format!(
+            "{}\u{2502}", prefix), "\u{251C}".to_owned()));
+        line.push_str(&walk(knn, avl, points, strides, r, format!(
+            "{}\u{2007}", prefix), "\u{2514}".to_owned()));
+    }
+    line
+}
+
+fn trace(
+    link_info: &WgslArray3Info,
+    start: i32,
+    links: &[i32],
+    seen: &mut HashSet<i32>
+) -> String {
+    if start == -1 {
+        return "end".to_owned();
+    } else if start >= (links.len() as i32) {
+        return "oob".to_owned();
+    } else if seen.contains(&start) {
+        return "loop".to_owned();
+    } else {
+        seen.insert(start);
+    }
+    format!(
+        "r{}c{}v{} -> {}",
+        (start as u32) / link_info.row_strides,
+        ((start as u32) % link_info.row_strides) / link_info.col_strides,
+        ((start as u32) % link_info.col_strides) / link_info.vox_strides,
+        trace(link_info, links[start as usize], links, seen))
 }
