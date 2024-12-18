@@ -18,31 +18,9 @@ override data_offset: u32;
 override data_row_strides: u32;
 override data_col_strides: u32;
 
-var<workgroup> distances: array<f32, points * k>;
-
-override distances_offset: u32 = 0u;
-override distances_row_strides: u32 = k;
-override distances_col_strides: u32 = 1u;
-
 override knn_offset: u32;
 override knn_row_strides: u32;
 override knn_col_strides: u32;
-
-override candidate_offset: u32 = 0u;
-override candidate_row_strides: u32 = candidates * candidate_col_strides;
-override candidate_col_strides: u32 = 2u;
-override candidate_vox_strides: u32 = 1u;
-
-override reservations_row_strides: u32 = (
-    reservations_col_strides * knn_row_strides);
-override reservations_col_strides: u32 = 2u;
-override reservations_vox_strides: u32 = 1u;
-
-var<workgroup> candidate_buffer:
-    array<atomic<i32>, points * candidate_row_strides>;
-var<workgroup> reverse_ticket:
-    array<atomic<i32>, points * candidate_col_strides>;
-var<workgroup> reservations: array<vec2i, points * reservations_row_strides>;
 
 override avl_offset: u32;
 override avl_row_strides: u32;
@@ -57,6 +35,37 @@ override link_offset: u32;
 override link_row_strides: u32;
 override link_col_strides: u32;
 override link_vox_strides: u32;
+
+var<workgroup> reverse_ticket:
+    array<atomic<i32>, points * candidate_col_strides>;
+
+var<workgroup> distances: array<f32, points * k>;
+
+override distances_offset: u32 = 0u;
+override distances_row_strides: u32 = k;
+override distances_col_strides: u32 = 1u;
+
+var<workgroup> candidate_buffer:
+    array<atomic<i32>, points * candidate_row_strides>;
+
+override candidate_offset: u32 = 0u;
+override candidate_row_strides: u32 = candidates * candidate_col_strides;
+override candidate_col_strides: u32 = 2u;
+override candidate_vox_strides: u32 = 1u;
+
+var<workgroup> reservations: array<vec2i, points * reservations_row_strides>;
+
+override reservations_row_strides: u32 = (
+    reservations_col_strides * knn_row_strides);
+override reservations_col_strides: u32 = 2u;
+override reservations_vox_strides: u32 = 1u;
+
+var<workgroup> boundary: array<f32, points * candidate_row_strides>;
+
+override boundary_offset: u32 = 0u;
+override boundary_row_strides: u32 = candidates * boundary_col_strides;
+override boundary_col_strides: u32 = 2u;
+override boundary_vox_strides: u32 = 1u;
 
 /***********************/
 /* tensor access utils */
@@ -226,59 +235,20 @@ fn reservations_set(row: u32, col: u32, vox: u32, value: vec2i) {
         vox * reservations_vox_strides] = value;
 }
 
-/**************************/
-/* heap impl b/c original */
-/**************************/
-
-fn index_swap(row: u32, col0: u32, col1: u32) {
-    let idx0 = knn[knn_offset + row * knn_row_strides + col0 * knn_col_strides];
-    let idx1 = knn[knn_offset + row * knn_row_strides + col1 * knn_col_strides];
-    knn[knn_offset + row * knn_row_strides + col0 * knn_col_strides] = idx1;
-    knn[knn_offset + row * knn_row_strides + col1 * knn_col_strides] = idx0;
-
-    let dist0 = distances[
-        distances_offset +
-        row * distances_row_strides +
-        col0 * distances_col_strides];
-    let dist1 = distances[
-        distances_offset +
-        row * distances_row_strides +
-        col1 * distances_col_strides];
-    distances[
-        distances_offset +
-        row * distances_row_strides +
-        col0 * distances_col_strides] = dist1;
-    distances[
-        distances_offset +
-        row * distances_row_strides +
-        col1 * distances_col_strides] = dist0;
+fn boundary_get(row: u32, col: u32, vox: u32) -> f32 {
+    return boundary[
+        boundary_offset +
+        row * boundary_row_strides +
+        col * boundary_col_strides +
+        vox * boundary_vox_strides];
 }
 
-fn sifted(row: u32) {
-    var col = 0u;
-    while (col * 2 + 1 < k) {
-        let left = col * 2 + 1;
-        let right = left + 1;
-        var swap = col;
-        if (distances_get(row, swap) < distances_get(row, left)) {
-            swap = left;
-        }
-        if (right < k && distances_get(row, swap) < distances_get(row, right)) {
-            swap = right;
-        }
-        if (swap == col) { break; }
-        index_swap(row, col, swap);
-        col = swap;
-    }
-}
-
-fn check(row: u32, index: i32) -> bool {
-    for (var i = 0u; i < k; i++) {
-        if (index == knn_get(row, i)) {
-            return true;
-        }
-    }
-    return false;
+fn boundary_set(row: u32, col: u32, vox: u32, value: f32) {
+    boundary[
+        boundary_offset +
+        row * boundary_row_strides +
+        col * boundary_col_strides +
+        vox * boundary_vox_strides] = value;
 }
 
 fn distance(row0: u32, row1: u32) -> f32 {
@@ -287,16 +257,6 @@ fn distance(row0: u32, row1: u32) -> f32 {
         total += pow(data_get(row0, i) - data_get(row1, i), 2.);
     }
     return total;
-}
-
-fn push(row: u32, candidate: i32) {
-    if (row == u32(candidate)) { return; }
-    let dist = distance(row, u32(candidate));
-    if (distances_get(row, 0u) <= dist) { return; }
-    if (check(row, candidate)) { return; }
-    distances_set(row, 0u, dist);
-    knn_flag_set(row, 0u, candidate, true);
-    sifted(row);
 }
 
 /************/
@@ -768,9 +728,16 @@ fn build(rng: vec2u, row: u32) {
     }
 }
 
+// stores to flag0 in boundary
+fn bound(row: u32, flag0: u32, flag1: u32) {
+}
+
 @compute
 @workgroup_size(points)
-fn main(@builtin(local_invocation_index) lid: u32) {
-    randomize(split(vec2u(0, seed), lid), lid);
-    build(split(vec2u(1, seed), lid), lid);
+fn main(@builtin(local_invocation_index) row: u32) {
+    randomize(split(vec2u(0, seed), row), row);
+    build(split(vec2u(1, seed), row), row);
+    storageBarrier();
+    bound(row, 0u, 1u);
+    bound(row, 1u, 1u);
 }
