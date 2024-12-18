@@ -728,8 +728,33 @@ fn build(rng: vec2u, row: u32) {
     }
 }
 
+const max_init = 0x1.fffffep+127f;
+
 // stores to flag0 in boundary
 fn bound(row: u32, flag0: u32, flag1: u32) {
+    for (var i = 0u; i < candidates; i++) {
+        var lo = max_init;
+        let point0i = candidate_get(row, i, flag0);
+        if (point0i == -1) { continue; }
+        let point0 = u32(point0i);
+        for (var j = 0u; j < candidates; j++) {
+            if (i == j && flag0 == flag1) { continue; }
+            let point1i = candidate_get(row, j, flag1);
+            if (point1i == -1 || point0i == point1i) { continue; }
+            let point1 = u32(point1i);
+            let dist = distance(point0, point1);
+            if (avl_check(point0, dist, point1i)) { continue; }
+            let threshold = meta_get(point0, avl_max);
+            if (avl_sign(point0, dist, point1i, threshold) >= 0) { continue; }
+            if (dist < lo) {
+                lo = dist;
+            }
+        }
+        boundary_set(row, i, flag0, lo);
+    }
+}
+
+fn link(row: u32) {
 }
 
 @compute
@@ -740,4 +765,6 @@ fn main(@builtin(local_invocation_index) row: u32) {
     storageBarrier();
     bound(row, 0u, 1u);
     bound(row, 1u, 1u);
+    storageBarrier();
+    link(row);
 }
