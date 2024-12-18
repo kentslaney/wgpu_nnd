@@ -169,12 +169,8 @@ fn meta_set(row: u32, col: u32, value: i32) {
         col * meta_col_strides] = value;
 }
 
-fn link_get(row: u32, col: u32, vox: u32) -> i32 {
-    return scratch[
-        link_offset +
-        row * link_row_strides +
-        col * link_col_strides +
-        vox * link_vox_strides];
+fn link_get(index: u32) -> i32 {
+    return scratch[link_offset + index];
 }
 
 fn link_set(row: u32, col: u32, vox: u32, value: i32) {
@@ -729,6 +725,7 @@ fn build(rng: vec2u, row: u32) {
 }
 
 const max_init = 0x1.fffffep+127f;
+const flag_new = 1u;
 
 // stores to flag0 in boundary
 fn bound(row: u32, flag0: u32, flag1: u32) {
@@ -737,15 +734,15 @@ fn bound(row: u32, flag0: u32, flag1: u32) {
         let point0i = candidate_get(row, i, flag0);
         if (point0i == -1) { continue; }
         let point0 = u32(point0i);
+        let threshold = meta_get(point0, avl_max);
         for (var j = 0u; j < candidates; j++) {
             if (i == j && flag0 == flag1) { continue; }
             let point1i = candidate_get(row, j, flag1);
             if (point1i == -1 || point0i == point1i) { continue; }
             let point1 = u32(point1i);
             let dist = distance(point0, point1);
-            if (avl_check(point0, dist, point1i)) { continue; }
-            let threshold = meta_get(point0, avl_max);
             if (avl_sign(point0, dist, point1i, threshold) >= 0) { continue; }
+            if (avl_check(point0, dist, point1i)) { continue; }
             if (dist < lo) {
                 lo = dist;
             }
@@ -754,7 +751,22 @@ fn bound(row: u32, flag0: u32, flag1: u32) {
     }
 }
 
-fn link(row: u32) {
+fn link(row: u32, start: i32) {
+    for (var node = start; node != -1; node = link_get(u32(node))) {
+        let target_row = u32(node) / link_row_strides;
+        let target_col = (u32(node) % link_row_strides) / link_col_strides;
+        let target_vox = (u32(node) % link_col_strides) / link_vox_strides;
+        let target_bound = boundary_get(target_row, target_col, target_vox);
+        if (target_bound == max_init) { continue; }
+        let threshold = meta_get(row, avl_max);
+        if (avl_sign(row, target_bound, -1, threshold) >= 0) { continue; }
+        for (var i = 0u; i < candidates; i++) {
+            if (target_vox == flag_new && i == target_col) { continue; }
+            let other = candidate_get(target_row, i, flag_new);
+            if (other == -1) { continue; }
+            avl_push(row, other);
+        }
+    }
 }
 
 @compute
@@ -763,8 +775,9 @@ fn main(@builtin(local_invocation_index) row: u32) {
     randomize(split(vec2u(0, seed), row), row);
     build(split(vec2u(1, seed), row), row);
     storageBarrier();
-    bound(row, 0u, 1u);
-    bound(row, 1u, 1u);
+    bound(row, 0u, flag_new);
+    bound(row, 1u, flag_new);
     storageBarrier();
-    link(row);
+    link(row, meta_get(row, avl_link_0));
+    link(row, meta_get(row, avl_link_1));
 }
